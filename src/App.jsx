@@ -12,6 +12,8 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import AllPOs from "./pages/TotalPos";
 import BillEntry from "./pages/BillEnteryPurchase";
+import CreatePO from "./pages/CreatePO"
+
 
 const AppWrapper = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -40,11 +42,21 @@ const AppWrapper = () => {
         <Route index element={<Dashboard />} />
         <Route path="all-pos" element={<AllPOs />} />
         <Route path="bill-entry" element={<BillEntry />} />
+
+      </Route>
+
+      <Route
+        path="/create-po"
+        element={
+          isAuthenticated ? <Layout /> : <Navigate to="/" replace />
+        }
+      >
+        <Route index element={<CreatePO />} />
       </Route>
 
       {/* Catch-all */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      < Route path="*" element={< Navigate to="/" replace />} />
+    </Routes >
   );
 };
 

@@ -32,6 +32,7 @@ export default function Dashboard() {
       icon: <PackageCheck className="text-blue-600" />,
       title: "In Entry",
       value: 4,
+
     },
   ];
 
@@ -47,9 +48,8 @@ export default function Dashboard() {
         {cards.map((card, i) => (
           <Card
             key={i}
-            className={`shadow cursor-pointer transition hover:shadow-md ${
-              card.route ? "hover:bg-gray-100" : ""
-            }`}
+            className={`shadow cursor-pointer transition hover:shadow-md ${card.route ? "hover:bg-gray-100" : ""
+              }`}
             onClick={() => handleCardClick(card.route)}
           >
             <CardContent className="p-4 flex flex-col gap-2">
