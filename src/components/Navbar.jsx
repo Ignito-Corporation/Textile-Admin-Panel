@@ -12,8 +12,8 @@ import { NavLink, useLocation } from 'react-router-dom';
 const menuItems = [
   { icon: <Home size={18} />, label: 'Dashboard', to: '/dashboard' },
   { icon: <PlusCircle size={18} />, label: 'Create PO', to: '/create-po' },
-  { icon: <List size={18} />, label: 'Create Purchase Bill', to: '/dashboard/Create_Purchase_Bill' },
-  { icon: <Settings size={18} />, label: 'Settings', to: '/dashboard/settings' },
+  { icon: <List size={18} />, label: 'Create Purchase Bill', to: '/create-purchase-bill' },
+  { icon: <Settings size={18} />, label: 'Settings', to: '/settings' },
   { icon: <LogOut size={18} />, label: 'Logout', to: '/logout' },
 ];
 

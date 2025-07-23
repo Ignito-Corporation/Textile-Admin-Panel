@@ -13,7 +13,7 @@ import Dashboard from "./pages/Dashboard";
 import AllPOs from "./pages/TotalPos";
 import BillEntry from "./pages/BillEnteryPurchase";
 import CreatePO from "./pages/CreatePO"
-
+import CreateBillEntry from "./pages/CreateBillEntry";
 
 const AppWrapper = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -52,6 +52,13 @@ const AppWrapper = () => {
         }
       >
         <Route index element={<CreatePO />} />
+      </Route>
+
+      <Route
+       path="/create-purchase-bill"
+       element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+       <Route index element={<CreateBillEntry />} />
       </Route>
 
       {/* Catch-all */}
