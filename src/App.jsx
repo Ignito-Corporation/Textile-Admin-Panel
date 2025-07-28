@@ -14,6 +14,7 @@ import AllPOs from "./pages/TotalPos";
 import BillEntry from "./pages/BillEnteryPurchase";
 import CreatePO from "./pages/CreatePO"
 import CreateBillEntry from "./pages/CreateBillEntry";
+import Out_Entery from "./pages/Out_Entery";
 
 const AppWrapper = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -42,7 +43,7 @@ const AppWrapper = () => {
         <Route index element={<Dashboard />} />
         <Route path="all-pos" element={<AllPOs />} />
         <Route path="bill-entry" element={<BillEntry />} />
-
+        <Route path='out-entry' element={<Out_Entery/>}/>
       </Route>
 
       <Route
