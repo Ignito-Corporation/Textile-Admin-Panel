@@ -13,9 +13,11 @@ const menuItems = [
   { icon: <Home size={18} />, label: 'Dashboard', to: '/dashboard' },
   { icon: <PlusCircle size={18} />, label: 'Create PO', to: '/create-po' },
   { icon: <List size={18} />, label: 'Create Purchase Bill', to: '/create-purchase-bill' },
+  { icon: <List size={18} />, label: 'Create In Entry', to: '/create-in-entry' }, // ✅ ADDED
   { icon: <Settings size={18} />, label: 'Settings', to: '/settings' },
   { icon: <LogOut size={18} />, label: 'Logout', to: '/logout' },
 ];
+
 
 export default function Navbar({ children }) {
   const [collapsed, setCollapsed] = useState(false);
