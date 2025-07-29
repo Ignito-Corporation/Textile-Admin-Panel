@@ -45,7 +45,8 @@ const AppWrapper = () => {
         <Route path="all-pos" element={<AllPOs />} />
         <Route path="bill-entry" element={<BillEntry />} />
         <Route path='out-entry' element={<Out_Entery />} />
-      </Route>
+        <Route path='out-entry' element={<Out_Entery />} />
+      </Route >
 
       <Route
         path="/create-po"
@@ -67,6 +68,12 @@ const AppWrapper = () => {
         element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
       >
         <Route index element={<Setting />} />
+      </Route>
+      <Route
+        path="/create-purchase-bill"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<CreateBillEntry />} />
       </Route>
 
       {/* Catch-all */}

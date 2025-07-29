@@ -53,6 +53,7 @@ export default function Dashboard() {
       icon: <CircleDollarSign className="text-yellow-500" />,
       title: "Out Entry",
       value: "₹28,84,389.2",
+      route: "/dashboard/out-entry", // ✅ Updated route
     },
     {
       icon: <PackageCheck className="text-blue-600" />,
