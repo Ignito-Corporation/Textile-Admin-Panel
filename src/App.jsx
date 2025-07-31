@@ -17,6 +17,8 @@ import CreateBillEntry from "./pages/CreateBillEntry";
 import Out_Entery from "./pages/Out_Entery";
 import Setting from "./pages/Setting";
 
+import FinalStock from "./pages/FinalStock";
+
 const AppWrapper = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(
     localStorage.getItem("isLoggedIn") === "true"
@@ -75,6 +77,13 @@ const AppWrapper = () => {
       >
         <Route index element={<CreateBillEntry />} />
       </Route>
+      <Route
+        path="/final-stock"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<FinalStock />} />
+      </Route>
+
 
       {/* Catch-all */}
       < Route path="*" element={< Navigate to="/" replace />} />

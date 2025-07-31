@@ -6,6 +6,7 @@ import {
   LogOut,
   PlusCircle,
   Menu,
+  ClipboardList
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 
@@ -14,6 +15,7 @@ const menuItems = [
   { icon: <PlusCircle size={18} />, label: 'Create PO', to: '/create-po' },
   { icon: <List size={18} />, label: 'Create Purchase Bill', to: '/create-purchase-bill' },
   { icon: <Settings size={18} />, label: 'Settings', to: '/settings' },
+  { icon: <ClipboardList size={18} />, label: 'Final Stock', to: '/final-stock' },
   { icon: <LogOut size={18} />, label: 'Logout', to: '/logout' },
 ];
 
