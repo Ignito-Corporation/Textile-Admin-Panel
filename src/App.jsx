@@ -17,6 +17,7 @@ import CreateBillEntry from "./pages/CreateBillEntry";
 import Out_Entery from "./pages/Out_Entery";
 import CreateInEntry from "./pages/CreateInEntry";
 import CreateOutEntry from "./pages/CreateOutentery";
+import ProductEntryForm from "./pages/ProductEntryForm";
 
 const AppWrapper = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -76,6 +77,13 @@ const AppWrapper = () => {
         element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
       >
         <Route index element={<CreateOutEntry />} />
+      </Route>
+
+      <Route
+        path="/create-product-entry"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<ProductEntryForm />} />
       </Route>
 
 
