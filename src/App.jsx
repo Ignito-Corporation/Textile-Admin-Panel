@@ -15,6 +15,8 @@ import BillEntry from "./pages/BillEnteryPurchase";
 import CreatePO from "./pages/CreatePO"
 import CreateBillEntry from "./pages/CreateBillEntry";
 import Out_Entery from "./pages/Out_Entery";
+import CreateInEntry from "./pages/CreateInEntry";
+import CreateOutEntry from "./pages/CreateOutentery";
 
 const AppWrapper = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -43,7 +45,7 @@ const AppWrapper = () => {
         <Route index element={<Dashboard />} />
         <Route path="all-pos" element={<AllPOs />} />
         <Route path="bill-entry" element={<BillEntry />} />
-        <Route path='out-entry' element={<Out_Entery/>}/>
+        <Route path='out-entry' element={<Out_Entery />} />
       </Route>
 
       <Route
@@ -56,11 +58,26 @@ const AppWrapper = () => {
       </Route>
 
       <Route
-       path="/create-purchase-bill"
-       element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+        path="/create-purchase-bill"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
       >
-       <Route index element={<CreateBillEntry />} />
+        <Route index element={<CreateBillEntry />} />
       </Route>
+
+      <Route
+        path="/create-in-entry"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<CreateInEntry />} />
+      </Route>
+
+       <Route
+        path="/create-out-entry"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<CreateOutEntry />} />
+      </Route>
+
 
       {/* Catch-all */}
       < Route path="*" element={< Navigate to="/" replace />} />
