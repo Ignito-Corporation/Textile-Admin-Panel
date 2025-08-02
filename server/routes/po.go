@@ -53,3 +53,24 @@ func CreatePO(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "PO created successfully", "po_id": result.InsertedID})
 }
+
+func GetAllPOs(c *gin.Context) {
+	collection := db.Database.Collection("purchase_orders")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cursor, err := collection.Find(ctx, primitive.M{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch POs", "details": err.Error()})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var pos []PurchaseOrder
+	if err := cursor.All(ctx, &pos); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode POs", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, pos)
+}

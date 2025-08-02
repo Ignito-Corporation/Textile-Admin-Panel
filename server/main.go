@@ -23,9 +23,15 @@ func main() {
 
 	//Routes Defined
 
+	//This is for Create PO Page
 	r.POST("/api/po", routes.CreatePO)
+	r.GET("/api/po", routes.GetAllPOs)
 	r.POST("/api/vendor", routes.AddVendor)
 	r.GET("/api/vendors", routes.GetVendors)
+
+	//This is for Create Bill Page
+	r.POST("/api/bill", routes.CreateBillEntry)
+	r.GET("/api/bills", routes.GetAllBills)
 
 	log.Println("Server running at http://localhost:8080")
 	r.Run(":8080")
