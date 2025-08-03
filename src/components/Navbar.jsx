@@ -8,6 +8,7 @@ import {
   Menu,
   FilePlus,
   FilePlus2,
+  ClipboardList,
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 
@@ -18,6 +19,7 @@ const menuItems = [
   { icon: <FilePlus2 size={18} />, label: 'Create In Entry', to: '/create-in-entry' }, // ✅ ADDED
   { icon: <FilePlus size={18} />, label: 'Create Out Entry', to: '/create-out-entry' }, // ✅ ADDED
   { icon: <FilePlus size={18} />, label: 'Create Product Entry', to: '/create-product-entry' },
+  { icon: <ClipboardList size={18} />, label: 'Final Stock', to: '/final-stock' },
   { icon: <Settings size={18} />, label: 'Settings', to: '/settings' },
   { icon: <LogOut size={18} />, label: 'Logout', to: '/logout' },
 ];

@@ -18,6 +18,7 @@ import Out_Entery from "./pages/Out_Entery";
 import CreateInEntry from "./pages/CreateInEntry";
 import CreateOutEntry from "./pages/CreateOutentery";
 import ProductEntryForm from "./pages/ProductEntryForm";
+import FinalStock from "./pages/FinalStock";
 
 const AppWrapper = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -84,6 +85,13 @@ const AppWrapper = () => {
         element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
       >
         <Route index element={<ProductEntryForm />} />
+      </Route>
+
+      <Route
+        path="/final-stock"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<FinalStock />} />
       </Route>
 
 
