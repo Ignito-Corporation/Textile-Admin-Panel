@@ -33,6 +33,11 @@ func main() {
 	r.POST("/api/bill", routes.CreateBillEntry)
 	r.GET("/api/bills", routes.GetAllBills)
 
+	//This is for Order In & Out
+	r.POST("/api/jobwork/out", routes.CreateJobWorkOut)
+	r.POST("/api/jobwork/in", routes.CreateJobWorkIn)
+	r.GET("/api/jobwork/out/:voucher", routes.GetJobWorkOutByVoucher)
+
 	log.Println("Server running at http://localhost:8080")
 	r.Run(":8080")
 }
