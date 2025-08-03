@@ -14,11 +14,12 @@ import AllPOs from "./pages/TotalPos";
 import BillEntry from "./pages/BillEnteryPurchase";
 import CreatePO from "./pages/CreatePO"
 import CreateBillEntry from "./pages/CreateBillEntry";
-import Out_Entery from "./pages/Out_Entery";
+import Out_Entry from "./pages/Out_Entry";
 import CreateInEntry from "./pages/CreateInEntry";
 import CreateOutEntry from "./pages/CreateOutentery";
 import ProductEntryForm from "./pages/ProductEntryForm";
 import FinalStock from "./pages/FinalStock";
+import Setting from "./pages/Settings"; 
 
 const AppWrapper = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -47,7 +48,7 @@ const AppWrapper = () => {
         <Route index element={<Dashboard />} />
         <Route path="all-pos" element={<AllPOs />} />
         <Route path="bill-entry" element={<BillEntry />} />
-        <Route path='out-entry' element={<Out_Entery />} />
+        <Route path='out-entry' element={<Out_Entry />} />
       </Route>
 
       <Route
@@ -92,6 +93,13 @@ const AppWrapper = () => {
         element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
       >
         <Route index element={<FinalStock />} />
+      </Route>
+
+      <Route
+        path="/settings"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<Setting />} />
       </Route>
 
 
