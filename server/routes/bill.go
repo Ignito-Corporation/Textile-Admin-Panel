@@ -3,14 +3,17 @@ package routes
 import (
 	"context"
 	"net/http"
-	"textile-admin-panel/db"
 	"time"
 
+	"textile-admin-panel/db"
+
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type ProductItem struct {
+	ProductID   string  `json:"product_id"`
 	ProductName string  `json:"product_name"`
 	Unit        string  `json:"unit"`
 	Shade       string  `json:"shade"`
@@ -24,6 +27,7 @@ type ProductItem struct {
 }
 
 type VendorInfo struct {
+	VendorID   string `json:"vendor_id"`
 	VendorName string `json:"vendor_name"`
 	PONumber   string `json:"po_number"`
 	GRNNumber  string `json:"grn_number"`
@@ -42,6 +46,7 @@ type PurchaseBill struct {
 	CRLNumber    string             `json:"crl_number"`
 	Vendor       VendorInfo         `json:"vendor"`
 	Products     []ProductItem      `json:"products"`
+	CreatedAt    time.Time          `json:"created_at"`
 }
 
 func CreateBillEntry(c *gin.Context) {
@@ -51,6 +56,7 @@ func CreateBillEntry(c *gin.Context) {
 		return
 	}
 
+	bill.CreatedAt = time.Now()
 	collection := db.Database.Collection("purchase_bills")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -69,7 +75,7 @@ func GetAllBills(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cursor, err := collection.Find(ctx, primitive.M{})
+	cursor, err := collection.Find(ctx, bson.M{})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch bills", "details": err.Error()})
 		return
@@ -83,4 +89,26 @@ func GetAllBills(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, bills)
+}
+
+func GetBillByID(c *gin.Context) {
+	id := c.Param("id")
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
+	}
+
+	collection := db.Database.Collection("purchase_bills")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var bill PurchaseBill
+	err = collection.FindOne(ctx, bson.M{"_id": objID}).Decode(&bill)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Bill not found", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, bill)
 }
