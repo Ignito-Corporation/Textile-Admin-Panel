@@ -46,20 +46,20 @@ export default function Dashboard() {
     {
       icon: <FileText className="text-green-600" />,
       title: "Bill Entry Purchase",
-      value: 4,
+      value: "₹28,84,389.2",
       route: "/dashboard/bill-entry", // ✅ Updated route
     },
     {
       icon: <CircleDollarSign className="text-yellow-500" />,
       title: "Out Entry",
-      value: "₹28,84,389.2",
+      value: "5",
       route: "/dashboard/out-entry", // ✅ Updated route
     },
     {
       icon: <PackageCheck className="text-blue-600" />,
       title: "In Entry",
       value: 4,
-
+      
     },
   ];
 

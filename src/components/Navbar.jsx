@@ -6,7 +6,9 @@ import {
   LogOut,
   PlusCircle,
   Menu,
-  ClipboardList
+  FilePlus,
+  FilePlus2,
+  ClipboardList,
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 
@@ -14,10 +16,15 @@ const menuItems = [
   { icon: <Home size={18} />, label: 'Dashboard', to: '/dashboard' },
   { icon: <PlusCircle size={18} />, label: 'Create PO', to: '/create-po' },
   { icon: <List size={18} />, label: 'Create Purchase Bill', to: '/create-purchase-bill' },
-  { icon: <Settings size={18} />, label: 'Settings', to: '/settings' },
+  { icon: <FilePlus2 size={18} />, label: 'Create In Entry', to: '/create-in-entry' }, // ✅ ADDED
+  { icon: <FilePlus size={18} />, label: 'Create Out Entry', to: '/create-out-entry' }, // ✅ ADDED
+  { icon: <FilePlus size={18} />, label: 'Create Product Entry', to: '/create-product-entry' },
   { icon: <ClipboardList size={18} />, label: 'Final Stock', to: '/final-stock' },
+  { icon: <Settings size={18} />, label: 'Settings', to: '/settings' },
+
   { icon: <LogOut size={18} />, label: 'Logout', to: '/logout' },
 ];
+
 
 export default function Navbar({ children }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -81,7 +88,7 @@ export default function Navbar({ children }) {
         </div>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-auto p-4">{children}</div>
+        <div className="flex-1 overflow-auto px-0 py-4">{children}</div>
       </div>
     </div>
   );

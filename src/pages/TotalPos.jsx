@@ -36,8 +36,11 @@ export default function AllPOs() {
   return (
     <div className="p-4">
       {/* Breadcrumb */}
-      <h2 className="text-xl font-semibold text-gray-700 mb-1">Dashboard</h2>
-      <h1 className="text-2xl font-bold text-blue-700 mb-6">Total PO’s</h1>
+      {/* <h2 className="text-xl font-semibold text-gray-700 mb-1">Dashboard</h2>
+      <h1 className="text-2xl font-bold text-blue-700 mb-6">Total PO’s</h1> */}
+      <div className="text-xl font-semibold text-gray-800 mb-4">
+        Dashboard <span className="text-blue-600">› Total PO’s</span>
+      </div>
 
       {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

@@ -14,10 +14,12 @@ import AllPOs from "./pages/TotalPos";
 import BillEntry from "./pages/BillEnteryPurchase";
 import CreatePO from "./pages/CreatePO"
 import CreateBillEntry from "./pages/CreateBillEntry";
-import Out_Entery from "./pages/Out_Entery";
-import Setting from "./pages/Setting";
-
+import Out_Entry from "./pages/Out_Entry";
+import CreateInEntry from "./pages/CreateInEntry";
+import CreateOutEntry from "./pages/CreateOutentery";
+import ProductEntryForm from "./pages/ProductEntryForm";
 import FinalStock from "./pages/FinalStock";
+import Setting from "./pages/Settings";
 
 const AppWrapper = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -46,9 +48,8 @@ const AppWrapper = () => {
         <Route index element={<Dashboard />} />
         <Route path="all-pos" element={<AllPOs />} />
         <Route path="bill-entry" element={<BillEntry />} />
-        <Route path='out-entry' element={<Out_Entery />} />
-        <Route path='out-entry' element={<Out_Entery />} />
-      </Route >
+        <Route path='out-entry' element={<Out_Entry />} />
+      </Route>
 
       <Route
         path="/create-po"
@@ -82,6 +83,42 @@ const AppWrapper = () => {
         element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
       >
         <Route index element={<FinalStock />} />
+      </Route>
+
+
+      <Route
+        path="/create-in-entry"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<CreateInEntry />} />
+      </Route>
+
+      <Route
+        path="/create-out-entry"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<CreateOutEntry />} />
+      </Route>
+
+      <Route
+        path="/create-product-entry"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<ProductEntryForm />} />
+      </Route>
+
+      <Route
+        path="/final-stock"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<FinalStock />} />
+      </Route>
+
+      <Route
+        path="/settings"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<Setting />} />
       </Route>
 
 
