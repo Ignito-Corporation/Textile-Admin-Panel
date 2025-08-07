@@ -56,6 +56,9 @@ func main() {
 		bill.GET("/:id", routes.GetBillByID)
 	}
 
+	//PDF Handler
+	r.POST("/api/convert/json-to-pdf", routes.ConvertJsonToPDF)
+
 	//Jobwork Endpoint
 	jobwork := r.Group("/api/jobwork")
 	{
