@@ -13,119 +13,247 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-type JobWorkOut struct {
-	ID            primitive.ObjectID       `bson:"_id,omitempty" json:"id,omitempty"`
-	VoucherNumber string                   `bson:"voucher_number" json:"voucher_number"`
-	EntryType     string                   `bson:"entry_type" json:"entry_type"`
-	IssuedDate    string                   `bson:"issued_date" json:"issued_date"`
-	VendorID      string                   `bson:"vendor_id" json:"vendor_id"`
-	VendorName    string                   `bson:"vendor_name" json:"vendor_name"`
-	FpoNumber     string                   `bson:"fpo_number" json:"fpo_number"`
-	Products      []map[string]interface{} `bson:"products" json:"products"`
-	IsIn          bool                     `bson:"is_in" json:"is_in"`
-	CreatedAt     time.Time                `bson:"created_at" json:"created_at"`
+// PARENT: The long-running tracked jobwork order (for a PO/lot)
+// Track: thread->knitting->dyeing->cloth journey
+type JobWorkOrder struct {
+	ID              primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	POID            primitive.ObjectID `bson:"po_id" json:"po_id"`
+	CurrentStage    string             `bson:"current_stage" json:"current_stage"`
+	OriginalProduct string             `bson:"original_product" json:"original_product"`
+	FinalProduct    string             `bson:"final_product" json:"final_product"`
+	QuantityTotal   float64            `bson:"quantity_total" json:"quantity_total"`
+	CreatedAt       time.Time          `bson:"created_at" json:"created_at"`
+	IsComplete      bool               `bson:"is_complete" json:"is_complete"`
 }
 
-type JobWorkIn struct {
-	ID            primitive.ObjectID       `bson:"_id,omitempty" json:"id,omitempty"`
-	VoucherNumber string                   `bson:"voucher_number" json:"voucher_number"`
-	Date          string                   `bson:"date" json:"date"`
-	Products      []map[string]interface{} `bson:"products" json:"products"`
-	CreatedAt     time.Time                `bson:"created_at" json:"created_at"`
+// OUT/IN batch (partial orders), always linked to parent JobWorkOrder
+type JobWorkSubOrder struct {
+	ID              primitive.ObjectID       `bson:"_id,omitempty" json:"id,omitempty"`
+	ParentJobWorkID primitive.ObjectID       `bson:"parent_jobwork_id" json:"parent_jobwork_id"`
+	VoucherNumber   string                   `bson:"voucher_number" json:"voucher_number"`
+	EntryType       string                   `bson:"entry_type" json:"entry_type"`
+	Process         string                   `bson:"process" json:"process"`
+	IssuedDate      string                   `bson:"issued_date" json:"issued_date"`
+	VendorID        string                   `bson:"vendor_id" json:"vendor_id"`
+	VendorName      string                   `bson:"vendor_name" json:"vendor_name"`
+	FpoNumber       string                   `bson:"fpo_number" json:"fpo_number"`
+	Products        []map[string]interface{} `bson:"products" json:"products"`
+	IsIn            bool                     `bson:"is_in" json:"is_in"`
+	CreatedAt       time.Time                `bson:"created_at" json:"created_at"`
 }
 
-func CreateJobWorkOut(c *gin.Context) {
-	var out JobWorkOut
-	if err := c.ShouldBindJSON(&out); err != nil {
+// --------- CREATE parent jobwork order endpoint -----------------
+func CreateJobWorkOrder(c *gin.Context) {
+	var payload struct {
+		POID            string  `json:"po_id"`
+		OriginalProduct string  `json:"original_product"`
+		QuantityTotal   float64 `json:"quantity_total"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid", "details": err.Error()})
+		return
+	}
+	poid, err := primitive.ObjectIDFromHex(payload.POID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid po_id"})
+		return
+	}
+	doc := JobWorkOrder{
+		POID:            poid,
+		CurrentStage:    "Knitting",
+		OriginalProduct: payload.OriginalProduct,
+		FinalProduct:    "",
+		QuantityTotal:   payload.QuantityTotal,
+		CreatedAt:       time.Now(),
+		IsComplete:      false,
+	}
+	res, err := db.Database.Collection("job_work_orders").InsertOne(context.Background(), doc)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Job work order created", "order_id": res.InsertedID})
+}
+
+// --------- CREATE sub-order (partial OUT or IN batch for knitting/dyeing) -----------
+func CreateJobWorkSubOrder(c *gin.Context) {
+	var sub JobWorkSubOrder
+	if err := c.ShouldBindJSON(&sub); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input", "details": err.Error()})
 		return
 	}
-
-	if out.VoucherNumber == "" {
-		out.VoucherNumber = fmt.Sprintf("OUT-%d", time.Now().Unix())
+	if sub.ParentJobWorkID.IsZero() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "parent_jobwork_id required"})
+		return
 	}
-	out.IsIn = false
-	out.CreatedAt = time.Now()
-
-	collection := db.Database.Collection("job_work_out")
+	// Validate parent exists
+	parentColl := db.Database.Collection("job_work_orders")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	result, err := collection.InsertOne(ctx, out)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create OUT entry", "details": err.Error()})
+	var parent JobWorkOrder
+	if err := parentColl.FindOne(ctx, bson.M{"_id": sub.ParentJobWorkID}).Decode(&parent); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid parent_jobwork_id"})
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":        "Job Work OUT entry created",
-		"voucher_number": out.VoucherNumber,
-		"out_id":         result.InsertedID,
-	})
+	if sub.VoucherNumber == "" {
+		sub.VoucherNumber = fmt.Sprintf("OUT-%d", time.Now().UnixNano())
+	}
+	sub.IsIn = (sub.EntryType == "IN")
+	sub.CreatedAt = time.Now()
+	// Insert the suborder
+	res, err := db.Database.Collection("job_work_suborders").InsertOne(ctx, sub)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create suborder", "details": err.Error()})
+		return
+	}
+	// On every "IN" for Knitting, check if knitting is over so next stage can begin
+	if sub.EntryType == "IN" && sub.Process == "Knitting" {
+		go checkAndStartDyeing(parent.ID)
+	}
+	// On every "IN" for Dyeing, check if workflow is complete
+	if sub.EntryType == "IN" && sub.Process == "Dyeing" {
+		go checkAndCompleteJobWork(parent.ID)
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Suborder created", "suborder_id": res.InsertedID, "voucher_number": sub.VoucherNumber})
 }
 
-func CreateJobWorkIn(c *gin.Context) {
-	var in JobWorkIn
-	if err := c.ShouldBindJSON(&in); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input", "details": err.Error()})
-		return
-	}
-
+// --------- Progress from Knitting to Dyeing when all OUT->IN is done -----
+func checkAndStartDyeing(parentID primitive.ObjectID) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	outCollection := db.Database.Collection("job_work_out")
-	inCollection := db.Database.Collection("job_work_in")
-
-	var outEntry JobWorkOut
-	err := outCollection.FindOne(ctx, bson.M{"voucher_number": in.VoucherNumber}).Decode(&outEntry)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No OUT entry found for this voucher number", "voucher": in.VoucherNumber})
+	// Get parent order
+	parentColl := db.Database.Collection("job_work_orders")
+	var parent JobWorkOrder
+	if err := parentColl.FindOne(ctx, bson.M{"_id": parentID}).Decode(&parent); err != nil {
 		return
 	}
-
-	if outEntry.IsIn {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "This voucher has already been marked as IN", "voucher": in.VoucherNumber})
+	if parent.CurrentStage != "Knitting" {
 		return
 	}
-
-	in.CreatedAt = time.Now()
-	result, err := inCollection.InsertOne(ctx, in)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save IN entry", "details": err.Error()})
-		return
-	}
-
-	_, err = outCollection.UpdateOne(
-		ctx,
-		bson.M{"voucher_number": in.VoucherNumber},
-		bson.M{"$set": bson.M{"is_in": true}},
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "IN saved, but failed to update OUT", "details": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":        "Job Work IN entry saved and OUT marked as received",
-		"in_id":          result.InsertedID,
-		"voucher_number": in.VoucherNumber,
+	// Get all IN suborders for Knitting
+	subColl := db.Database.Collection("job_work_suborders")
+	cursor, _ := subColl.Find(ctx, bson.M{
+		"parent_jobwork_id": parentID,
+		"entry_type":        "IN",
+		"process":           "Knitting",
 	})
+	defer cursor.Close(ctx)
+	var totalIn float64
+	for cursor.Next(ctx) {
+		var job JobWorkSubOrder
+		if err := cursor.Decode(&job); err == nil {
+			for _, prod := range job.Products {
+				if q, ok := prod["quantity"].(float64); ok {
+					totalIn += q
+				} else if q, ok := prod["quantity"].(int); ok {
+					totalIn += float64(q)
+				}
+			}
+		}
+	}
+	if totalIn >= parent.QuantityTotal {
+		// All thread is knitted → Progress stage, update product
+		parentColl.UpdateOne(ctx, bson.M{"_id": parentID}, bson.M{"$set": bson.M{"current_stage": "Dyeing", "final_product": "Cloth"}})
+	}
 }
 
-func GetJobWorkOutByVoucher(c *gin.Context) {
-	voucher := c.Param("voucher")
-	collection := db.Database.Collection("job_work_out")
+// --------- Mark workflow as complete when all Dyeing INs returned -----
+func checkAndCompleteJobWork(parentID primitive.ObjectID) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	// Get parent order
+	parentColl := db.Database.Collection("job_work_orders")
+	var parent JobWorkOrder
+	if err := parentColl.FindOne(ctx, bson.M{"_id": parentID}).Decode(&parent); err != nil {
+		return
+	}
+	if parent.IsComplete {
+		return
+	}
+	// Get all IN suborders for Dyeing
+	subColl := db.Database.Collection("job_work_suborders")
+	cursor, _ := subColl.Find(ctx, bson.M{
+		"parent_jobwork_id": parentID,
+		"entry_type":        "IN",
+		"process":           "Dyeing",
+	})
+	defer cursor.Close(ctx)
+	var totalIn float64
+	for cursor.Next(ctx) {
+		var job JobWorkSubOrder
+		if err := cursor.Decode(&job); err == nil {
+			for _, prod := range job.Products {
+				if q, ok := prod["quantity"].(float64); ok {
+					totalIn += q
+				} else if q, ok := prod["quantity"].(int); ok {
+					totalIn += float64(q)
+				}
+			}
+		}
+	}
+	if totalIn >= parent.QuantityTotal {
+		parentColl.UpdateOne(ctx, bson.M{"_id": parentID}, bson.M{"$set": bson.M{"current_stage": "Completed", "is_complete": true}})
+	}
+}
 
+// --------- Fetch suborder/out/in by voucher number -----------
+func GetJobWorkSubOrderByVoucher(c *gin.Context) {
+	voucher := c.Param("voucher")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	var out JobWorkOut
-	err := collection.FindOne(ctx, bson.M{"voucher_number": voucher}).Decode(&out)
+	var subOrder JobWorkSubOrder
+	err := db.Database.Collection("job_work_suborders").FindOne(ctx, bson.M{"voucher_number": voucher}).Decode(&subOrder)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Voucher not found", "details": err.Error()})
 		return
 	}
+	c.JSON(http.StatusOK, subOrder)
+}
 
+// --------- Fetch parent jobwork order (for main status) -----------
+func GetJobWorkOrder(c *gin.Context) {
+	id := c.Param("id")
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	var parent JobWorkOrder
+	err = db.Database.Collection("job_work_orders").FindOne(context.Background(), bson.M{"_id": objID}).Decode(&parent)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	c.JSON(http.StatusOK, parent)
+}
+
+// --------- List all suborders for parent jobwork id (optionally filtered by process/entry type) ---------
+func ListJobWorkSubOrders(c *gin.Context) {
+	parentID := c.Query("parent_id")
+	process := c.Query("process")
+	entryType := c.Query("entry_type")
+	objID, err := primitive.ObjectIDFromHex(parentID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid parent_id"})
+		return
+	}
+	filter := bson.M{"parent_jobwork_id": objID}
+	if process != "" {
+		filter["process"] = process
+	}
+	if entryType != "" {
+		filter["entry_type"] = entryType
+	}
+	cursor, err := db.Database.Collection("job_work_suborders").Find(context.Background(), filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "query failed"})
+		return
+	}
+	defer cursor.Close(context.Background())
+	var out []JobWorkSubOrder
+	if err := cursor.All(context.Background(), &out); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "decode failed"})
+		return
+	}
 	c.JSON(http.StatusOK, out)
 }

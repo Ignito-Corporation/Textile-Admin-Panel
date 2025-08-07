@@ -5,6 +5,9 @@ import (
 	"textile-admin-panel/db"
 	"textile-admin-panel/routes"
 
+	"time"
+
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,6 +19,15 @@ func main() {
 	}
 
 	r := gin.Default()
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowMethods:     []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Hello World"})
@@ -43,9 +55,12 @@ func main() {
 	//Jobwork Endpoint
 	jobwork := r.Group("/api/jobwork")
 	{
-		jobwork.POST("/out", routes.CreateJobWorkOut)
-		jobwork.POST("/in", routes.CreateJobWorkIn)
-		jobwork.GET("/out/:voucher", routes.GetJobWorkOutByVoucher)
+		jobwork.POST("/order", routes.CreateJobWorkOrder)
+		jobwork.POST("/suborder", routes.CreateJobWorkSubOrder)
+		jobwork.GET("/suborder/voucher/:voucher", routes.GetJobWorkSubOrderByVoucher)
+		jobwork.GET("/order/:id", routes.GetJobWorkOrder)
+		jobwork.GET("/suborders", routes.ListJobWorkSubOrders)
+
 	}
 
 	//Master Data Routes
