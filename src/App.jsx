@@ -19,7 +19,7 @@ import CreateInEntry from "./pages/CreateInEntry";
 import CreateOutEntry from "./pages/CreateOutentery";
 import ProductEntryForm from "./pages/ProductEntryForm";
 import FinalStock from "./pages/FinalStock";
-import Setting from "./pages/Settings"; 
+import Setting from "./pages/Settings";
 
 const AppWrapper = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -66,6 +66,25 @@ const AppWrapper = () => {
       >
         <Route index element={<CreateBillEntry />} />
       </Route>
+      <Route
+        path="/settings"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<Setting />} />
+      </Route>
+      <Route
+        path="/create-purchase-bill"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<CreateBillEntry />} />
+      </Route>
+      <Route
+        path="/final-stock"
+        element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
+      >
+        <Route index element={<FinalStock />} />
+      </Route>
+
 
       <Route
         path="/create-in-entry"
@@ -74,7 +93,7 @@ const AppWrapper = () => {
         <Route index element={<CreateInEntry />} />
       </Route>
 
-       <Route
+      <Route
         path="/create-out-entry"
         element={isAuthenticated ? <Layout /> : <Navigate to="/" replace />}
       >

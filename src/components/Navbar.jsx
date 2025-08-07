@@ -21,6 +21,7 @@ const menuItems = [
   { icon: <FilePlus size={18} />, label: 'Create Product Entry', to: '/create-product-entry' },
   { icon: <ClipboardList size={18} />, label: 'Final Stock', to: '/final-stock' },
   { icon: <Settings size={18} />, label: 'Settings', to: '/settings' },
+
   { icon: <LogOut size={18} />, label: 'Logout', to: '/logout' },
 ];
 
