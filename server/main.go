@@ -20,18 +20,14 @@ func main() {
 
 	r := gin.Default()
 
-	
-	  r.Use(cors.New(cors.Config{
-        AllowOrigins:     []string{
-            "http://localhost:5173", 
-            "https://textile-admin-panel-6k2c.onrender.com"
-        },
-        AllowMethods:     []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
-        AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-        ExposeHeaders:    []string{"Content-Length"},
-        AllowCredentials: true,
-        MaxAge:           12 * time.Hour,
-    }))
+	r.Use(cors.New(cors.Config{
+		AllowAllOrigins:  true, // This allows requests from all origins
+		AllowMethods:     []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Hello World"})
@@ -55,6 +51,9 @@ func main() {
 		bill.GET("/summary", routes.GetBillSummary)
 		bill.GET("/:id", routes.GetBillByID)
 	}
+
+	//PDF Handler
+	r.POST("/api/convert/json-to-pdf", routes.ConvertJsonToPDF)
 
 	//Jobwork Endpoint
 	jobwork := r.Group("/api/jobwork")
