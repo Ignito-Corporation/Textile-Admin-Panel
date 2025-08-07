@@ -28,6 +28,7 @@ func main() {
 		po.GET("/", routes.GetAllPOs)
 		po.GET("/:id", routes.GetPOByID)
 		po.GET("/generate-number", routes.GetNextPONumber)
+		po.PATCH("/:id/close", routes.ClosePO)
 	}
 
 	//Bill Endpoint
@@ -60,6 +61,13 @@ func main() {
 		api.GET("/shades", routes.GetAllShades)
 
 		api.GET("/all", routes.GetAllMasterData)
+
+		api.POST("/final-product", routes.AddFinalProduct)
+		api.GET("/final-products", routes.GetAllFinalProducts)
+
+		api.POST("/final-product-stock", routes.AddFinalProductStock)
+		api.GET("/final-product-stocks", routes.GetAllFinalProductStocks)
+
 	}
 
 	log.Println("Server running at http://localhost:8080")
