@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type ProductItem struct {
@@ -44,9 +45,16 @@ type PurchaseBill struct {
 	BillDate     string             `json:"bill_date"`
 	ReceivedDate string             `json:"received_date"`
 	CRLNumber    string             `json:"crl_number"`
+	Mode         string             `json:"mode"`
 	Vendor       VendorInfo         `json:"vendor"`
 	Products     []ProductItem      `json:"products"`
 	CreatedAt    time.Time          `json:"created_at"`
+}
+
+type BillSummary struct {
+	TotalBillEntry int64   `json:"total_bill_entry"`
+	TotalValue     float64 `json:"total_value"`
+	ThisMonth      int64   `json:"this_month"`
 }
 
 func CreateBillEntry(c *gin.Context) {
@@ -111,4 +119,65 @@ func GetBillByID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, bill)
+}
+
+func GetBillSummary(c *gin.Context) {
+	collection := db.Database.Collection("purchase_bills")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	totalBillEntry, err := collection.CountDocuments(ctx, bson.M{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count documents"})
+		return
+	}
+
+	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$unwind", Value: "$products"}},
+		bson.D{{
+			Key: "$group",
+			Value: bson.D{
+				{Key: "_id", Value: nil},
+				{Key: "totalValue", Value: bson.D{
+					{Key: "$sum", Value: "$products.amount"},
+				}},
+			},
+		}},
+	}
+
+	cursor, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to calculate total value"})
+		return
+	}
+
+	var result []bson.M
+	if err := cursor.All(ctx, &result); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode aggregation result"})
+		return
+	}
+
+	totalValue := 0.0
+	if len(result) > 0 {
+		totalValue = result[0]["totalValue"].(float64)
+	}
+
+	now := time.Now()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+
+	thisMonth, err := collection.CountDocuments(ctx, bson.M{
+		"created_at": bson.M{"$gte": startOfMonth},
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count this month's bills"})
+		return
+	}
+
+	summary := BillSummary{
+		TotalBillEntry: totalBillEntry,
+		TotalValue:     totalValue,
+		ThisMonth:      thisMonth,
+	}
+
+	c.JSON(http.StatusOK, summary)
 }
