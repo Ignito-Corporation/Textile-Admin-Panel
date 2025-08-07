@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FileDown } from 'lucide-react';
+
 export default function FinalStock() {
     const [finalProduct, setFinalProduct] = useState({
         productName: '',
@@ -31,15 +32,29 @@ export default function FinalStock() {
             <div className="mb-6">
                 <h3 className="font-semibold mb-2">Enter Details</h3>
                 <div className="grid grid-cols-4 gap-4 mb-4">
-                    <input name="productName" onChange={handleFinalChange} placeholder="Input to be displayed here" className="p-2 border rounded" />
-                    <input name="quantity" onChange={handleFinalChange} placeholder="Input to be displayed here" className="p-2 border rounded" />
-                    <input name="voucherNumber" onChange={handleFinalChange} placeholder="Input to be displayed here" className="p-2 border rounded" />
-                    <input name="date" type="date" onChange={handleFinalChange} placeholder="Input to be displayed here" className="p-2 border rounded" />
+                    <div className="flex flex-col">
+                        <label htmlFor="productName" className="mb-1 font-sm">Product Name*</label>
+                        <input id="productName" name="productName" onChange={handleFinalChange} placeholder="Enter product name" className="p-2 border rounded" />
+                    </div>
+
+                    <div className="flex flex-col">
+                        <label htmlFor="quantity" className="mb-1 font-sm">Quantity</label>
+                        <input id="quantity" name="quantity" onChange={handleFinalChange} placeholder="Enter quantity" className="p-2 border rounded" />
+                    </div>
+
+                    <div className="flex flex-col">
+                        <label htmlFor="voucherNumber" className="mb-1 font-sm">Voucher Number</label>
+                        <input id="voucherNumber" name="voucherNumber" onChange={handleFinalChange} placeholder="Enter voucher number" className="p-2 border rounded" />
+                    </div>
+
+                    <div className="flex flex-col">
+                        <label htmlFor="date" className="mb-1 font-sm">Date</label>
+                        <input id="date" type="date" name="date" onChange={handleFinalChange} className="p-2 border rounded" />
+                    </div>
                 </div>
                 <div className="flex justify-end">
                     <button className="bg-green-700 text-white px-4 py-2 rounded-sm">Save Data</button>
                 </div>
-
             </div>
 
             <table className="w-full border-collapse rounded-2xl overflow-hidden shadow">
@@ -70,16 +85,34 @@ export default function FinalStock() {
                 <h2 className="text-2xl font-bold mb-4">Out Product</h2>
                 <h3 className="font-semibold mb-2">Enter Details</h3>
                 <div className="grid grid-cols-5 gap-4 mb-4">
-                    <input name="productName" onChange={handleOutChange} placeholder="Input to be displayed here" className="p-2 border rounded" />
-                    <input name="quantity" onChange={handleOutChange} placeholder="Input to be displayed here" className="p-2 border rounded" />
-                    <input name="partyName" onChange={handleOutChange} placeholder="Input to be displayed here" className="p-2 border rounded" />
-                    <input name="process" onChange={handleOutChange} placeholder="Input to be displayed here" className="p-2 border rounded" />
-                    <input name="date" type="date" onChange={handleOutChange} placeholder="Input to be displayed here" className="p-2 border rounded" />
+                    <div className="flex flex-col">
+                        <label htmlFor="outProductName" className="mb-1 font-sm">Product Name*</label>
+                        <input id="outProductName" name="productName" onChange={handleOutChange} placeholder="Enter product name" className="p-2 border rounded" />
+                    </div>
+
+                    <div className="flex flex-col">
+                        <label htmlFor="outQuantity" className="mb-1 font-sm">Quantity</label>
+                        <input id="outQuantity" name="quantity" onChange={handleOutChange} placeholder="Enter quantity" className="p-2 border rounded" />
+                    </div>
+
+                    <div className="flex flex-col">
+                        <label htmlFor="partyName" className="mb-1 font-sm">Party Name</label>
+                        <input id="partyName" name="partyName" onChange={handleOutChange} placeholder="Enter party name" className="p-2 border rounded" />
+                    </div>
+
+                    <div className="flex flex-col">
+                        <label htmlFor="process" className="mb-1 font-sm">Process</label>
+                        <input id="process" name="process" onChange={handleOutChange} placeholder="Enter process" className="p-2 border rounded" />
+                    </div>
+
+                    <div className="flex flex-col">
+                        <label htmlFor="outDate" className="mb-1 font-sm">Date</label>
+                        <input id="outDate" type="date" name="date" onChange={handleOutChange} className="p-2 border rounded" />
+                    </div>
                 </div>
                 <div className="flex justify-end">
                     <button className="bg-green-700 text-white px-4 py-2 rounded-sm">Save Data</button>
                 </div>
-
             </div>
 
             <table className="w-full border-collapse rounded-2xl overflow-hidden shadow">
@@ -106,13 +139,13 @@ export default function FinalStock() {
                     ))}
                 </tbody>
             </table>
+
             <div className="flex justify-start mb-10 mt-4">
                 <button className="bg-green-700 text-white px-4 py-2 rounded-sm flex items-center gap-2">
                     <FileDown size={18} />
                     Generate Pdf
                 </button>
             </div>
-            
-        </div >
+        </div>
     );
 }
