@@ -7,7 +7,7 @@ import {
   useLocation,
 } from "react-router-dom";
 
-import Layout from "./layout/Layout";
+import Layout from "./layout/layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import AllPOs from "./pages/TotalPos";

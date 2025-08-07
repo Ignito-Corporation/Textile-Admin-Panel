@@ -15,26 +15,28 @@ var Client *mongo.Client
 var Database *mongo.Database
 
 func ConnectMongoDB() bool {
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("❌ Error loading .env file")
-		return false
-	}
+	_ = godotenv.Load()
 
 	uri := os.Getenv("GO_MONGO_URI")
 	dbName := os.Getenv("GO_MONGO_DB")
+
+	if uri == "" || dbName == "" {
+		log.Println(" Missing GO_MONGO_URI or GO_MONGO_DB environment variables")
+		return false
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	clientOptions := options.Client().ApplyURI(uri)
-	var connectErr error
-	Client, connectErr = mongo.Connect(ctx, clientOptions)
-	if connectErr != nil {
-		log.Println("MongoDB connection error:", connectErr)
+	client, err := mongo.Connect(ctx, clientOptions)
+	if err != nil {
+		log.Println("MongoDB connection error:", err)
 		return false
 	}
 
-	Database = Client.Database(dbName)
+	Client = client
+	Database = client.Database(dbName)
+	log.Println("Connected to MongoDB")
 	return true
 }

@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"textile-admin-panel/db"
 	"time"
+
+	"textile-admin-panel/db"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -16,10 +17,13 @@ type JobWorkOut struct {
 	ID            primitive.ObjectID       `bson:"_id,omitempty" json:"id,omitempty"`
 	VoucherNumber string                   `bson:"voucher_number" json:"voucher_number"`
 	EntryType     string                   `bson:"entry_type" json:"entry_type"`
-	Date          string                   `bson:"date" json:"date"`
-	Vendor        string                   `bson:"vendor" json:"vendor"`
+	IssuedDate    string                   `bson:"issued_date" json:"issued_date"`
+	VendorID      string                   `bson:"vendor_id" json:"vendor_id"`
+	VendorName    string                   `bson:"vendor_name" json:"vendor_name"`
+	FpoNumber     string                   `bson:"fpo_number" json:"fpo_number"`
 	Products      []map[string]interface{} `bson:"products" json:"products"`
 	IsIn          bool                     `bson:"is_in" json:"is_in"`
+	CreatedAt     time.Time                `bson:"created_at" json:"created_at"`
 }
 
 type JobWorkIn struct {
@@ -27,9 +31,9 @@ type JobWorkIn struct {
 	VoucherNumber string                   `bson:"voucher_number" json:"voucher_number"`
 	Date          string                   `bson:"date" json:"date"`
 	Products      []map[string]interface{} `bson:"products" json:"products"`
+	CreatedAt     time.Time                `bson:"created_at" json:"created_at"`
 }
 
-// POST /api/jobwork/out
 func CreateJobWorkOut(c *gin.Context) {
 	var out JobWorkOut
 	if err := c.ShouldBindJSON(&out); err != nil {
@@ -41,6 +45,7 @@ func CreateJobWorkOut(c *gin.Context) {
 		out.VoucherNumber = fmt.Sprintf("OUT-%d", time.Now().Unix())
 	}
 	out.IsIn = false
+	out.CreatedAt = time.Now()
 
 	collection := db.Database.Collection("job_work_out")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -59,7 +64,6 @@ func CreateJobWorkOut(c *gin.Context) {
 	})
 }
 
-// POST /api/jobwork/in
 func CreateJobWorkIn(c *gin.Context) {
 	var in JobWorkIn
 	if err := c.ShouldBindJSON(&in); err != nil {
@@ -76,21 +80,16 @@ func CreateJobWorkIn(c *gin.Context) {
 	var outEntry JobWorkOut
 	err := outCollection.FindOne(ctx, bson.M{"voucher_number": in.VoucherNumber}).Decode(&outEntry)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":   "No OUT entry found for this voucher number",
-			"voucher": in.VoucherNumber,
-		})
+		c.JSON(http.StatusNotFound, gin.H{"error": "No OUT entry found for this voucher number", "voucher": in.VoucherNumber})
 		return
 	}
 
 	if outEntry.IsIn {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "This voucher has already been marked as IN",
-			"voucher": in.VoucherNumber,
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This voucher has already been marked as IN", "voucher": in.VoucherNumber})
 		return
 	}
 
+	in.CreatedAt = time.Now()
 	result, err := inCollection.InsertOne(ctx, in)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save IN entry", "details": err.Error()})
@@ -114,7 +113,6 @@ func CreateJobWorkIn(c *gin.Context) {
 	})
 }
 
-// GET /api/jobwork/out/:voucher
 func GetJobWorkOutByVoucher(c *gin.Context) {
 	voucher := c.Param("voucher")
 	collection := db.Database.Collection("job_work_out")
