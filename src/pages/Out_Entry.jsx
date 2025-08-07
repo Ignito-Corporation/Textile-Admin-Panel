@@ -53,7 +53,7 @@ export default function StockConversionPage() {
               <TableRow className="py-4 h-16 hover:bg-slate-900"> 
                 <TableHead className="text-white px-4 py-3">Product Name</TableHead>
                 <TableHead className="text-white px-4 py-3">Unit</TableHead>
-                <TableHead className="text-white px-4 py-3">Issue City</TableHead>
+                <TableHead className="text-white px-4 py-3">Issue Qty</TableHead>
                 <TableHead className="text-white px-4 py-3">Issue Date</TableHead>
                 <TableHead className="text-white px-4 py-3">Receiving Date</TableHead>
                 <TableHead className="text-white px-4 py-3">Receiving City</TableHead>
