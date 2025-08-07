@@ -238,3 +238,53 @@ func ListJobWorkSubOrders(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, out)
 }
+
+// ---- GET COMPLETED FINAL PRODUCTS ----
+// Fetches all documents from 'job_work_orders' where 'is_complete' is true.
+func GetCompletedFinalProducts(c *gin.Context) {
+	collection := db.Database.Collection("job_work_orders")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	filter := bson.M{"is_complete": true}
+
+	cursor, err := collection.Find(ctx, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch completed final products", "details": err.Error()})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var results []JobWorkOrder
+	if err = cursor.All(ctx, &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode completed final products", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
+}
+
+// ---- GET OUT PRODUCTS ----
+// Fetches all documents from 'job_work_suborders' where 'is_in' is false.
+func GetOutProducts(c *gin.Context) {
+	collection := db.Database.Collection("job_work_suborders")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	filter := bson.M{"is_in": false}
+
+	cursor, err := collection.Find(ctx, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch out products", "details": err.Error()})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var results []JobWorkSubOrder
+	if err = cursor.All(ctx, &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode out products", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
+}
