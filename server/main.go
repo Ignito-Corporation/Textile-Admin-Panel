@@ -60,7 +60,8 @@ func main() {
 		jobwork.GET("/suborder/voucher/:voucher", routes.GetJobWorkSubOrderByVoucher)
 		jobwork.GET("/order/:id", routes.GetJobWorkOrder)
 		jobwork.GET("/suborders", routes.ListJobWorkSubOrders)
-
+		jobwork.GET("/completed-products", routes.GetCompletedFinalProducts)
+		jobwork.GET("/out-products", routes.GetOutProducts)
 	}
 
 	//Master Data Routes
