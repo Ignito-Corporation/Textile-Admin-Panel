@@ -36,6 +36,7 @@ func main() {
 	{
 		bill.POST("/", routes.CreateBillEntry)
 		bill.GET("/", routes.GetAllBills)
+		bill.GET("/summary", routes.GetBillSummary)
 		bill.GET("/:id", routes.GetBillByID)
 	}
 
@@ -56,6 +57,7 @@ func main() {
 
 		api.POST("/vendors", routes.AddVendor)
 		api.GET("/vendors", routes.GetVendors)
+		api.GET("/vendors/:id", routes.GetVendorByID)
 
 		api.POST("/shades", routes.AddShade)
 		api.GET("/shades", routes.GetAllShades)

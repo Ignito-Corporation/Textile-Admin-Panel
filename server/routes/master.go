@@ -158,6 +158,29 @@ func GetVendors(c *gin.Context) {
 	c.JSON(http.StatusOK, vendors)
 }
 
+// ---- GET VENDOR BY ID ----
+func GetVendorByID(c *gin.Context) {
+	id := c.Param("id")
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid vendor ID"})
+		return
+	}
+
+	collection := db.Database.Collection("vendors")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var vendor Vendor
+	err = collection.FindOne(ctx, bson.M{"_id": objID}).Decode(&vendor)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Vendor not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, vendor)
+}
+
 // ---- ADD SHADE ----
 func AddShade(c *gin.Context) {
 	var s Shade
