@@ -13,8 +13,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// PARENT: The long-running tracked jobwork order (for a PO/lot)
-// Track: thread->knitting->dyeing->cloth journey
 type JobWorkOrder struct {
 	ID              primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
 	POID            primitive.ObjectID `bson:"po_id" json:"po_id"`
@@ -26,7 +24,6 @@ type JobWorkOrder struct {
 	IsComplete      bool               `bson:"is_complete" json:"is_complete"`
 }
 
-// OUT/IN batch (partial orders), always linked to parent JobWorkOrder
 type JobWorkSubOrder struct {
 	ID              primitive.ObjectID       `bson:"_id,omitempty" json:"id,omitempty"`
 	ParentJobWorkID primitive.ObjectID       `bson:"parent_jobwork_id" json:"parent_jobwork_id"`
@@ -42,7 +39,6 @@ type JobWorkSubOrder struct {
 	CreatedAt       time.Time                `bson:"created_at" json:"created_at"`
 }
 
-// --------- CREATE parent jobwork order endpoint -----------------
 func CreateJobWorkOrder(c *gin.Context) {
 	var payload struct {
 		POID            string  `json:"po_id"`
@@ -75,7 +71,6 @@ func CreateJobWorkOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Job work order created", "order_id": res.InsertedID})
 }
 
-// --------- CREATE sub-order (partial OUT or IN batch for knitting/dyeing) -----------
 func CreateJobWorkSubOrder(c *gin.Context) {
 	var sub JobWorkSubOrder
 	if err := c.ShouldBindJSON(&sub); err != nil {
@@ -86,7 +81,6 @@ func CreateJobWorkSubOrder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "parent_jobwork_id required"})
 		return
 	}
-	// Validate parent exists
 	parentColl := db.Database.Collection("job_work_orders")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -100,28 +94,23 @@ func CreateJobWorkSubOrder(c *gin.Context) {
 	}
 	sub.IsIn = (sub.EntryType == "IN")
 	sub.CreatedAt = time.Now()
-	// Insert the suborder
 	res, err := db.Database.Collection("job_work_suborders").InsertOne(ctx, sub)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create suborder", "details": err.Error()})
 		return
 	}
-	// On every "IN" for Knitting, check if knitting is over so next stage can begin
 	if sub.EntryType == "IN" && sub.Process == "Knitting" {
 		go checkAndStartDyeing(parent.ID)
 	}
-	// On every "IN" for Dyeing, check if workflow is complete
 	if sub.EntryType == "IN" && sub.Process == "Dyeing" {
 		go checkAndCompleteJobWork(parent.ID)
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Suborder created", "suborder_id": res.InsertedID, "voucher_number": sub.VoucherNumber})
 }
 
-// --------- Progress from Knitting to Dyeing when all OUT->IN is done -----
 func checkAndStartDyeing(parentID primitive.ObjectID) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	// Get parent order
 	parentColl := db.Database.Collection("job_work_orders")
 	var parent JobWorkOrder
 	if err := parentColl.FindOne(ctx, bson.M{"_id": parentID}).Decode(&parent); err != nil {
@@ -130,7 +119,6 @@ func checkAndStartDyeing(parentID primitive.ObjectID) {
 	if parent.CurrentStage != "Knitting" {
 		return
 	}
-	// Get all IN suborders for Knitting
 	subColl := db.Database.Collection("job_work_suborders")
 	cursor, _ := subColl.Find(ctx, bson.M{
 		"parent_jobwork_id": parentID,
@@ -152,16 +140,13 @@ func checkAndStartDyeing(parentID primitive.ObjectID) {
 		}
 	}
 	if totalIn >= parent.QuantityTotal {
-		// All thread is knitted → Progress stage, update product
 		parentColl.UpdateOne(ctx, bson.M{"_id": parentID}, bson.M{"$set": bson.M{"current_stage": "Dyeing", "final_product": "Cloth"}})
 	}
 }
 
-// --------- Mark workflow as complete when all Dyeing INs returned -----
 func checkAndCompleteJobWork(parentID primitive.ObjectID) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	// Get parent order
 	parentColl := db.Database.Collection("job_work_orders")
 	var parent JobWorkOrder
 	if err := parentColl.FindOne(ctx, bson.M{"_id": parentID}).Decode(&parent); err != nil {
@@ -170,7 +155,6 @@ func checkAndCompleteJobWork(parentID primitive.ObjectID) {
 	if parent.IsComplete {
 		return
 	}
-	// Get all IN suborders for Dyeing
 	subColl := db.Database.Collection("job_work_suborders")
 	cursor, _ := subColl.Find(ctx, bson.M{
 		"parent_jobwork_id": parentID,
@@ -196,7 +180,6 @@ func checkAndCompleteJobWork(parentID primitive.ObjectID) {
 	}
 }
 
-// --------- Fetch suborder/out/in by voucher number -----------
 func GetJobWorkSubOrderByVoucher(c *gin.Context) {
 	voucher := c.Param("voucher")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -210,7 +193,6 @@ func GetJobWorkSubOrderByVoucher(c *gin.Context) {
 	c.JSON(http.StatusOK, subOrder)
 }
 
-// --------- Fetch parent jobwork order (for main status) -----------
 func GetJobWorkOrder(c *gin.Context) {
 	id := c.Param("id")
 	objID, err := primitive.ObjectIDFromHex(id)
@@ -227,7 +209,6 @@ func GetJobWorkOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, parent)
 }
 
-// --------- List all suborders for parent jobwork id (optionally filtered by process/entry type) ---------
 func ListJobWorkSubOrders(c *gin.Context) {
 	parentID := c.Query("parent_id")
 	process := c.Query("process")
@@ -256,4 +237,54 @@ func ListJobWorkSubOrders(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, out)
+}
+
+// ---- GET COMPLETED FINAL PRODUCTS ----
+// Fetches all documents from 'job_work_orders' where 'is_complete' is true.
+func GetCompletedFinalProducts(c *gin.Context) {
+	collection := db.Database.Collection("job_work_orders")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	filter := bson.M{"is_complete": true}
+
+	cursor, err := collection.Find(ctx, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch completed final products", "details": err.Error()})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var results []JobWorkOrder
+	if err = cursor.All(ctx, &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode completed final products", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
+}
+
+// ---- GET OUT PRODUCTS ----
+// Fetches all documents from 'job_work_suborders' where 'is_in' is false.
+func GetOutProducts(c *gin.Context) {
+	collection := db.Database.Collection("job_work_suborders")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	filter := bson.M{"is_in": false}
+
+	cursor, err := collection.Find(ctx, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch out products", "details": err.Error()})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var results []JobWorkSubOrder
+	if err = cursor.All(ctx, &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode out products", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
 }
