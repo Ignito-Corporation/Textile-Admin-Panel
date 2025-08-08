@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 
 const vendorCategories = ["Supplier", "Job Worker"];
 const paymentModes = ["Cash", "Check"];
@@ -28,23 +28,6 @@ const ProductEntryForm = () => {
         stockUnit: "",
         stockQuantity: "",
     });
-
-    // Fetch server routes when component mounts
-    useEffect(() => {
-        const fetchRoutes = async () => {
-            try {
-                const response = await fetch(
-                    "https://textile-admin-panel-6k2c.onrender.com/ping"
-                );
-                const data = await response.json();
-                console.log("Server Routes:", data);
-            } catch (error) {
-                console.error("Error fetching routes:", error);
-            }
-        };
-
-        fetchRoutes();
-    }, []); // Empty dependency array ensures this runs only once on mount
 
     const handleChange = (e) => {
         const { name, value } = e.target;

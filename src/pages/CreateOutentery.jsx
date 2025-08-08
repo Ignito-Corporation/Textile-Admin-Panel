@@ -4,9 +4,14 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 import { CirclePlus } from 'lucide-react';
-
 
 const CreateOutEntry = () => {
   const [entryType, setEntryType] = useState('');
@@ -15,13 +20,24 @@ const CreateOutEntry = () => {
   const entryTypes = ['Knitting', 'Dying'];
   const vendors = ['Vendor A', 'Vendor B', 'Vendor C'];
 
-  const tableRows = Array.from({ length: 7 }, (_, i) => (
-    <tr key={i} className="border-b text-center text-sm text-muted-foreground">
-      <td className="py-2 px-4">-</td>
-      <td className="py-2 px-4">-</td>
-      <td className="py-2 px-4">-</td>
-      <td className="py-2 px-4">-</td>
-      <td className="py-2 px-4">-</td>
+  const knittingRows = Array.from({ length: 7 }, (_, i) => (
+    <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-[#f8f8f8]'}>
+      <td className="py-2 px-4 text-center text-sm text-muted-foreground">-</td>
+      <td className="py-2 px-4 text-center text-sm text-muted-foreground">-</td>
+      <td className="py-2 px-4 text-center text-sm text-muted-foreground">-</td>
+      <td className="py-2 px-4 text-center text-sm text-muted-foreground">-</td>
+      <td className="py-2 px-4 text-center text-sm text-muted-foreground">-</td>
+    </tr>
+  ));
+
+  const dyingRows = Array.from({ length: 9 }, (_, i) => (
+    <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-[#f8f8f8]'}>
+      <td className="py-2 px-4 text-center text-sm text-muted-foreground">-</td>
+      <td className="py-2 px-4 text-center text-sm text-muted-foreground">-</td>
+      <td className="py-2 px-4 text-center text-sm text-muted-foreground">-</td>
+      <td className="py-2 px-4 text-center text-sm text-muted-foreground">-</td>
+      <td className="py-2 px-4 text-center text-sm text-muted-foreground">-</td>
+      <td className="py-2 px-4 text-center text-sm text-muted-foreground">-</td>
     </tr>
   ));
 
@@ -29,7 +45,10 @@ const CreateOutEntry = () => {
     <div className="p-6 bg-white min-h-screen">
       {/* Top Bar */}
       <div className="flex items-center justify-between bg-[#2C3E50] text-white px-6 py-4 rounded-t-md shadow">
-        <h1 className="text-lg font-semibold flex items-center gap-2"><CirclePlus className="w-6 h-6 text-white bg-[#2C3E50] rounded-full  " />Create Out Entry</h1>
+        <h1 className="text-lg font-semibold flex items-center gap-2">
+          <CirclePlus className="w-6 h-6 text-white bg-[#2C3E50] rounded-full" />
+          Create Out Entry
+        </h1>
         <Button variant="secondary">← Back</Button>
       </div>
 
@@ -46,7 +65,9 @@ const CreateOutEntry = () => {
               </SelectTrigger>
               <SelectContent>
                 {entryTypes.map((type) => (
-                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -73,7 +94,9 @@ const CreateOutEntry = () => {
               </SelectTrigger>
               <SelectContent>
                 {vendors.map((v) => (
-                  <SelectItem key={v} value={v}>{v}</SelectItem>
+                  <SelectItem key={v} value={v}>
+                    {v}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -87,27 +110,52 @@ const CreateOutEntry = () => {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="mt-8 overflow-x-auto rounded-md border">
-        <table className="w-full table-auto border-collapse">
-          <thead className="bg-[#2C3E50] text-white text-sm">
-            <tr>
-              <th className="py-2 px-4 text-left">Product Name</th>
-              <th className="py-2 px-4 text-left">Unit</th>
-              <th className="py-2 px-4 text-left">Issue Qty</th>
-              <th className="py-2 px-4 text-left">Process</th>
-              <th className="py-2 px-4 text-left">Deliver Status</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white">
-            {tableRows}
-          </tbody>
-        </table>
-      </div>
+      {/* Knitting Table */}
+      {entryType === 'Knitting' && (
+        <div className="mt-8 overflow-x-auto rounded-md border">
+          <table className="w-full table-auto border-collapse">
+            <thead className="bg-[#2C3E50] text-white text-sm">
+              <tr>
+                <th className="py-2 px-4 text-center">Product Name</th>
+                <th className="py-2 px-4 text-center">Unit</th>
+                <th className="py-2 px-4 text-center">Issue Qty</th>
+                <th className="py-2 px-4 text-center">Process</th>
+                <th className="py-2 px-4 text-center">Deliver Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {knittingRows}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Dying Table */}
+      {entryType === 'Dying' && (
+        <div className="mt-8 overflow-x-auto rounded-md border">
+          <table className="w-full table-auto border-collapse">
+            <thead className="bg-[#2C3E50] text-white text-sm">
+              <tr>
+                <th className="py-2 px-4 text-center">Product Name</th>
+                <th className="py-2 px-4 text-center">Unit</th>
+                <th className="py-2 px-4 text-center">Lot no.</th>
+                <th className="py-2 px-4 text-center">Shade</th>
+                <th className="py-2 px-4 text-center">Issue Qty</th>
+                <th className="py-2 px-4 text-center">Process</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dyingRows}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Save Button */}
       <div className="mt-8 text-center">
-        <Button className="bg-green-600 hover:bg-green-700 text-white px-8 py-2 text-md rounded">Save</Button>
+        <Button className="bg-green-600 hover:bg-green-700 text-white px-8 py-2 text-md rounded">
+          Save
+        </Button>
       </div>
     </div>
   );
