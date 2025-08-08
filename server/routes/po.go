@@ -107,6 +107,7 @@ func CreatePO(c *gin.Context) {
 			ProductID string  `json:"product_id"`
 			Quantity  int     `json:"quantity"`
 			Rate      float64 `json:"rate"`
+			Unit      string  `json:"unit"`
 		} `json:"items"`
 	}
 	if err := c.ShouldBindJSON(&payload); err != nil {
@@ -210,22 +211,25 @@ func GetAllPOs(c *gin.Context) {
 
 // ------------------------- GET PO By ID Endpoint --------------------------- //
 func GetPOByID(c *gin.Context) {
-	idParam := c.Param("id")
-	poID, err := primitive.ObjectIDFromHex(idParam)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid PO ID"})
-		return
-	}
+	poNumber := c.Param("id") // now treating 'id' as 'po_number'
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
 	var po PurchaseOrder
-	err = db.Database.Collection("purchase_orders").FindOne(ctx, bson.M{"_id": poID}).Decode(&po)
+	err := db.Database.
+		Collection("purchase_orders").
+		FindOne(ctx, bson.M{"po_number": poNumber}). // 👈 changed only this line
+		Decode(&po)
+
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "PO not found"})
 		return
 	}
+
 	c.JSON(http.StatusOK, po)
 }
+
 
 // ---------------------- NEXT PO NUMBER Endpoint --------------------------- //
 func GetNextPONumber(c *gin.Context) {

@@ -20,11 +20,11 @@ type ProductItem struct {
 	Shade       string  `json:"shade"`
 	LotNo       string  `json:"lot_no"`
 	MillName    string  `json:"mill_name"`
-	ProductQty  float64 `json:"product_qty"`
+	ProductQty  float64 `json:"quantity"`      // 🔁 Match 'quantity' from frontend
 	Rate        float64 `json:"rate"`
 	GSTPercent  float64 `json:"gst_percent"`
 	Amount      float64 `json:"amount"`
-	GRate       float64 `json:"grate"`
+	GRate       float64 `json:"gst_amount"`    // 🔁 Match 'gst_amount' from frontend
 }
 
 type VendorInfo struct {
