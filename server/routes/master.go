@@ -46,22 +46,6 @@ type Shade struct {
 	ShadeCode *string            `json:"shade_code,omitempty" bson:"shade_code,omitempty"`
 }
 
-// ---- FINAL PRODUCT ----
-type FinalProduct struct {
-	ID   primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	Name *string            `json:"name" bson:"name,omitempty"`
-	// Add more fields if you want! Based on UI, seems it's just a name.
-}
-
-// ---- FINAL PRODUCT STOCK ----
-type FinalProductStock struct {
-	ID          primitive.ObjectID  `bson:"_id,omitempty" json:"id,omitempty"`
-	ProductID   *primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	ProductName *string             `json:"product_name,omitempty" bson:"product_name,omitempty"` // Easier linking!
-	Unit        *string             `json:"unit,omitempty" bson:"unit,omitempty"`
-	Quantity    *float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-}
-
 // ===== MASTER ROUTES =====
 
 // ---- ADD PRODUCT ----
@@ -266,80 +250,4 @@ func GetAllMasterData(c *gin.Context) {
 		"vendors":  vendors,
 		"shades":   shades,
 	})
-}
-
-// --------------- FINAL PRODUCTS & STOCK ENDPOINTS ----------------
-
-// ---- ADD FINAL PRODUCT ----
-func AddFinalProduct(c *gin.Context) {
-	var fp FinalProduct
-	if err := c.ShouldBindJSON(&fp); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid final product data", "details": err.Error()})
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	collection := db.Database.Collection("final_products")
-	result, err := collection.InsertOne(ctx, fp)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save final product", "details": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "Final product added", "final_product_id": result.InsertedID})
-}
-
-// ---- GET ALL FINAL PRODUCTS ----
-func GetAllFinalProducts(c *gin.Context) {
-	collection := db.Database.Collection("final_products")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	cursor, err := collection.Find(ctx, bson.M{})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch final products", "details": err.Error()})
-		return
-	}
-	defer cursor.Close(ctx)
-	var fps []FinalProduct
-	if err := cursor.All(ctx, &fps); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decoding final products", "details": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, fps)
-}
-
-// ---- ADD FINAL PRODUCT STOCK ----
-func AddFinalProductStock(c *gin.Context) {
-	var fps FinalProductStock
-	if err := c.ShouldBindJSON(&fps); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid final product stock data", "details": err.Error()})
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	collection := db.Database.Collection("final_product_stocks")
-	result, err := collection.InsertOne(ctx, fps)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save final product stock", "details": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "Final product stock added", "final_product_stock_id": result.InsertedID})
-}
-
-// ---- GET ALL FINAL PRODUCT STOCKS ----
-func GetAllFinalProductStocks(c *gin.Context) {
-	collection := db.Database.Collection("final_product_stocks")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	cursor, err := collection.Find(ctx, bson.M{})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch final product stocks", "details": err.Error()})
-		return
-	}
-	defer cursor.Close(ctx)
-	var fps []FinalProductStock
-	if err := cursor.All(ctx, &fps); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decoding final product stocks", "details": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, fps)
 }

@@ -89,13 +89,20 @@ func main() {
 		api.GET("/shades", routes.GetAllShades)
 
 		api.GET("/all", routes.GetAllMasterData)
+	}
 
-		api.POST("/final-product", routes.AddFinalProduct)
-		api.GET("/final-products", routes.GetAllFinalProducts)
+	// Final Stock Routes
+	finalStock := r.Group("/api/finalstock")
+	{
+		finalStock.POST("/", routes.AddFinalStockProduct)
+		finalStock.GET("/", routes.GetAllFinalStockProducts)
+	}
 
-		api.POST("/final-product-stock", routes.AddFinalProductStock)
-		api.GET("/final-product-stocks", routes.GetAllFinalProductStocks)
-
+	// Out Product Routes
+	outProducts := r.Group("/api/outproducts")
+	{
+		outProducts.POST("/", routes.AddOutProduct)
+		outProducts.GET("/", routes.GetAllOutProducts)
 	}
 
 	log.Println("Server running at http://localhost:8080")
