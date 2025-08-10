@@ -65,6 +65,10 @@ func main() {
 		jobwork.GET("/suborders", routes.ListJobWorkSubOrders)
 		jobwork.GET("/completed-products", routes.GetCompletedFinalProducts)
 		jobwork.GET("/out-products", routes.GetOutProducts)
+		jobwork.GET("/available-knitting", routes.GetAvailableKnitting)
+		jobwork.GET("/available-dying", routes.GetAvailableDying)
+		jobwork.PATCH("/suborder/:voucher/is_in", routes.UpdateSubOrderIsInStatus)
+
 	}
 
 	//Master Data Routes
