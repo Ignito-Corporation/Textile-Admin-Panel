@@ -65,10 +65,12 @@ func main() {
 		jobwork.GET("/suborders", routes.ListJobWorkSubOrders)
 		jobwork.GET("/completed-products", routes.GetCompletedFinalProducts)
 		jobwork.GET("/out-products", routes.GetOutProducts)
-		jobwork.GET("/available-knitting", routes.GetAvailableKnitting)
-		jobwork.GET("/available-dying", routes.GetAvailableDying)
-		jobwork.PATCH("/suborder/:voucher/is_in", routes.UpdateSubOrderIsInStatus)
 
+		// Corrected routes to match frontend usage
+		jobwork.GET("/available-knitting/:po_number", routes.GetAvailableKnitting)
+		jobwork.GET("/available-dying/:po_number", routes.GetAvailableDying) // Changed to match knitting endpoint pattern
+
+		jobwork.PATCH("/suborder/:voucher/is_in", routes.UpdateSubOrderIsInStatus)
 	}
 
 	//Master Data Routes

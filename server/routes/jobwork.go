@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
-	"strings"
 	"time"
 
 	"textile-admin-panel/db"
@@ -206,31 +205,18 @@ func CreateJobWorkSubOrder(c *gin.Context) {
 		CreatedBy       string       `json:"created_by,omitempty"`
 		Remarks         string       `json:"remarks,omitempty"`
 	}
+
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload", "details": err.Error()})
 		return
 	}
+
 	parentID, err := primitive.ObjectIDFromHex(payload.ParentJobWorkID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid parent_jobwork_id"})
 		return
 	}
-	if len(payload.Products) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "products required"})
-		return
-	}
-	entryType := payload.EntryType
-	process := payload.Process
-	if entryType != "OUT" && entryType != "IN" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "entry_type must be OUT or IN"})
-		return
-	}
-	if process != "Knitting" && process != "Dyeing" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "process must be Knitting or Dyeing"})
-		return
-	}
 
-	// session + transaction
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
@@ -243,98 +229,65 @@ func CreateJobWorkSubOrder(c *gin.Context) {
 	defer session.EndSession(ctx)
 
 	callback := func(sessCtx mongo.SessionContext) (interface{}, error) {
-		// 1) Load parent jobwork (read inside txn)
 		var parent JobWorkOrder
 		if err := jobWorkOrdersColl().FindOne(sessCtx, bson.M{"_id": parentID}).Decode(&parent); err != nil {
 			return nil, errors.New("parent jobwork not found")
 		}
 
-		// 2) Validate & prepare updates per product
-		// We'll accumulate array of increments to apply using arrayFilters
 		type prodChange struct {
 			ProdIdx int
 			Inc     bson.M
 			Set     bson.M
 		}
 		var changes []prodChange
-
-		// track if we need to convert to stock per product (on dyeing IN)
 		var convertProducts []SubProduct
 
 		for _, sp := range payload.Products {
 			pid := sp.ProductID
-			idx := findProductIndex(parent.Products, pid)
+			if err != nil {
+				return nil, fmt.Errorf("invalid product_id format: %s", sp.ProductID)
+			}
+
+			idx := -1
+			for i, p := range parent.Products {
+				if p.ProductID == pid {
+					idx = i
+					break
+				}
+			}
 			if idx < 0 {
 				return nil, fmt.Errorf("product %s not found in parent jobwork", pid.Hex())
 			}
-			pp := parent.Products[idx]
 
-			// compute numbers depending on process and entry type
+			pp := parent.Products[idx]
 			q := sp.Quantity
-			if q <= 0 {
-				return nil, fmt.Errorf("quantity must be > 0 for product %s", pid.Hex())
-			}
 
 			inc := bson.M{}
 			set := bson.M{}
 
-			// In the CreateJobWorkSubOrder function, modify the validation logic:
-
-			switch process {
+			switch payload.Process {
 			case "Knitting":
-				if entryType == "OUT" {
-					// Calculate remaining quantity (expected - already issued)
-					remaining := pp.ExpectedQty - pp.OutKnittingQty
-					if q > remaining && !payload.Override {
-						return nil, fmt.Errorf(
-							"attempt to OUT %.3f but only %.3f remaining for product %s; pass override=true to force",
-							q, remaining, pid.Hex())
-					}
+				if payload.EntryType == "OUT" {
 					inc["products.$[p].out_knitting_qty"] = q
-					// Update remaining quantity display
-					set["products.$[p].remaining_qty"] = remaining - q
+					set["products.$[p].remaining_qty"] = pp.ExpectedQty - pp.OutKnittingQty - q
 					if pp.CurrentStage == "Pending" {
 						set["products.$[p].current_stage"] = "Knitting"
 					}
-				} else { // IN for Knitting
-					issuedOut := pp.OutKnittingQty
-					if pp.InKnittingQty+q > issuedOut && !payload.Override {
-						return nil, fmt.Errorf(
-							"attempt to IN %.3f but only %.3f issued out for knitting for product %s",
-							q, issuedOut-pp.InKnittingQty, pid.Hex())
-					}
+				} else {
 					inc["products.$[p].in_knitting_qty"] = q
-					// Update remaining quantity for next stage
-					set["products.$[p].remaining_qty"] = issuedOut - (pp.InKnittingQty + q)
+					set["products.$[p].remaining_qty"] = pp.OutKnittingQty - (pp.InKnittingQty + q)
 					if pp.InKnittingQty+q >= pp.ExpectedQty {
 						set["products.$[p].current_stage"] = "Dyeing"
 					}
 				}
 			case "Dyeing":
-				if entryType == "OUT" {
-					remaining := pp.InKnittingQty - pp.OutDyeingQty
-					if q > remaining && !payload.Override {
-						return nil, fmt.Errorf(
-							"attempt to OUT %.3f dyeing but only %.3f available (knitted qty) for product %s",
-							q, remaining, pid.Hex())
-					}
+				if payload.EntryType == "OUT" {
 					inc["products.$[p].out_dyeing_qty"] = q
-					// Update remaining quantity display
-					set["products.$[p].remaining_qty"] = remaining - q
-					if pp.CurrentStage == "Dyeing" {
-						// keep as dyeing
-					}
-				} else { // IN for Dyeing
-					issuedOut := pp.OutDyeingQty
-					if pp.InDyeingQty+q > issuedOut && !payload.Override {
-						return nil, fmt.Errorf(
-							"attempt to IN %.3f dyeing but only %.3f issued out for dyeing for product %s",
-							q, issuedOut-pp.InDyeingQty, pid.Hex())
-					}
+					set["products.$[p].remaining_qty"] = pp.InKnittingQty - pp.OutDyeingQty - q
+				} else {
 					inc["products.$[p].in_dyeing_qty"] = q
-					// Update remaining quantity
-					set["products.$[p].remaining_qty"] = issuedOut - (pp.InDyeingQty + q)
-					if pp.InDyeingQty+q >= pp.ExpectedQty || pp.InDyeingQty+q >= issuedOut {
+					set["products.$[p].remaining_qty"] = pp.OutDyeingQty - (pp.InDyeingQty + q)
+					if pp.InDyeingQty+q >= pp.ExpectedQty || pp.InDyeingQty+q >= pp.OutDyeingQty {
 						set["products.$[p].current_stage"] = "Completed"
 						if sp.FinalName != "" {
 							set["products.$[p].final_product_name"] = sp.FinalName
@@ -349,23 +302,25 @@ func CreateJobWorkSubOrder(c *gin.Context) {
 				Inc:     inc,
 				Set:     set,
 			})
-		} // end for each product
+		}
 
-		// 3) Insert suborder doc
 		voucher := payload.VoucherNumber
 		if voucher == "" {
 			voucher = fmt.Sprintf("%s-%d", payload.EntryType, time.Now().UnixNano())
 		}
+
 		var vendorOid *primitive.ObjectID
 		if payload.VendorID != "" {
 			if oid, err := primitive.ObjectIDFromHex(payload.VendorID); err == nil {
 				vendorOid = &oid
 			}
 		}
+
 		issuedDate := nowUTC()
 		if payload.IssuedDate != nil {
 			issuedDate = *payload.IssuedDate
 		}
+
 		sub := JobWorkSubOrder{
 			ParentJobWorkID: parentID,
 			VoucherNumber:   voucher,
@@ -384,42 +339,33 @@ func CreateJobWorkSubOrder(c *gin.Context) {
 			CreatedBy:       payload.CreatedBy,
 			Remarks:         payload.Remarks,
 		}
+
 		if _, err := jobWorkSubordersColl().InsertOne(sessCtx, sub); err != nil {
 			return nil, fmt.Errorf("failed to insert suborder: %w", err)
 		}
 
-		// 4) Apply per-product updates using arrayFilters to target each product by product_id
 		for _, ch := range changes {
-			if len(ch.Inc) == 0 && len(ch.Set) == 0 {
-				continue
-			}
 			update := bson.M{}
 			if len(ch.Inc) > 0 {
 				update["$inc"] = ch.Inc
 			}
 			if len(ch.Set) > 0 {
-				if update["$set"] == nil {
-					update["$set"] = ch.Set
-				} else {
-					for k, v := range ch.Set {
-						update["$set"].(bson.M)[k] = v
-					}
-				}
+				update["$set"] = ch.Set
 			}
+
 			arrayFilter := options.Update().SetArrayFilters(options.ArrayFilters{
 				Filters: []interface{}{bson.M{"p.product_id": parent.Products[ch.ProdIdx].ProductID}},
 			})
+
 			if _, err := jobWorkOrdersColl().UpdateOne(sessCtx, bson.M{"_id": parentID}, update, arrayFilter); err != nil {
 				return nil, fmt.Errorf("failed to update parent counters: %w", err)
 			}
 		}
 
-		// 5) After updates, refresh the parent product slices to check whole-order completion & possible stock conversion
 		if err := jobWorkOrdersColl().FindOne(sessCtx, bson.M{"_id": parentID}).Decode(&parent); err != nil {
 			return nil, fmt.Errorf("failed to re-read parent: %w", err)
 		}
 
-		// If any products became Completed, and overall all products Completed -> mark order complete
 		allCompleted := true
 		for _, p := range parent.Products {
 			if p.CurrentStage != "Completed" {
@@ -433,10 +379,10 @@ func CreateJobWorkSubOrder(c *gin.Context) {
 			}
 		}
 
-		// 6) Convert finished products to stock (if any convertProducts). Do inside txn for atomicity.
 		for _, cp := range convertProducts {
+			pid := cp.ProductID
 			stockDoc := bson.M{
-				"product_id":         cp.ProductID,
+				"product_id":         pid,
 				"source_jobwork_id":  parentID,
 				"source_voucher":     voucher,
 				"lot_no":             cp.LotNo,
@@ -455,7 +401,6 @@ func CreateJobWorkSubOrder(c *gin.Context) {
 	}
 
 	if _, err := session.WithTransaction(ctx, callback); err != nil {
-		// transaction failed: return error message
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create suborder", "details": err.Error()})
 		return
 	}
@@ -590,21 +535,22 @@ func GetAvailableKnitting(c *gin.Context) {
 	defer cancel()
 
 	purchaseBillColl := db.Database.Collection("purchase_bills")
-	jobWorkSubOrderColl := db.Database.Collection("jobwork_suborders")
 
-	// Get optional vendor_name from query
-	vendorName := strings.TrimSpace(c.Query("vendor_name"))
-
-	// Build filter for purchase bills
-	filter := bson.M{}
-	if vendorName != "" {
-		// Match the actual Mongo field name "partyname" with case-insensitive regex
-		filter["partyname"] = bson.M{
-			"$regex": primitive.Regex{Pattern: "^" + regexp.QuoteMeta(vendorName) + "$", Options: "i"},
-		}
+	// Get PO number from path parameter
+	poNumber := c.Param("po_number")
+	if poNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "PO number is required"})
+		return
 	}
 
-	// Fetch all (or vendor-filtered) purchase bills
+	// Exact match (case insensitive) for PO number
+	filter := bson.M{
+		"vendor.ponumber": bson.M{
+			"$regex": primitive.Regex{Pattern: "^" + regexp.QuoteMeta(poNumber) + "$", Options: "i"},
+		},
+	}
+
+	// Find matching purchase bills
 	var bills []PurchaseBill
 	cursor, err := purchaseBillColl.Find(ctx, filter)
 	if err != nil {
@@ -618,146 +564,168 @@ func GetAvailableKnitting(c *gin.Context) {
 		return
 	}
 
-	type AvailableProduct struct {
-		ProductID   string  `json:"product_id"`
-		ProductName string  `json:"product_name"`
-		Unit        string  `json:"unit"`
-		Shade       string  `json:"shade"`
-		LotNo       string  `json:"lot_no"`
-		Remaining   float64 `json:"remaining_qty"`
+	if len(bills) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No bills found with the given PO number"})
+		return
 	}
 
-	var available []AvailableProduct
+	// Prepare response - we'll take the first matching bill (assuming PO numbers are unique)
+	bill := bills[0]
 
-	for _, bill := range bills {
-		for _, p := range bill.Products {
-
-			// Build match condition for both string & ObjectID
-			orConditions := []bson.M{{"product_id": p.ProductID}}
-			if oid, err := primitive.ObjectIDFromHex(p.ProductID); err == nil {
-				orConditions = append(orConditions, bson.M{"product_id": oid})
-			}
-
-			match := bson.M{
-				"process_type": "Knitting",
-				"$or":          orConditions,
-			}
-
-			// Aggregate issued qty
-			var totalSent struct {
-				Total float64 `bson:"total"`
-			}
-			pipeline := mongo.Pipeline{
-				{{Key: "$match", Value: match}},
-				{{Key: "$group", Value: bson.M{
-					"_id":   nil,
-					"total": bson.M{"$sum": "$issue_qty"},
-				}}},
-			}
-
-			cur, err := jobWorkSubOrderColl.Aggregate(ctx, pipeline)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Aggregation failed", "details": err.Error()})
-				return
-			}
-			if cur.Next(ctx) {
-				_ = cur.Decode(&totalSent)
-			}
-			cur.Close(ctx)
-
-			remaining := p.ProductQty - totalSent.Total
-
-			// Debugging
-			println("Bill:", bill.PartyName, "| Product:", p.ProductName, "| Qty:", p.ProductQty, "| Sent:", totalSent.Total, "| Remaining:", remaining)
-
-			if remaining > 0 {
-				available = append(available, AvailableProduct{
-					ProductID:   p.ProductID,
-					ProductName: p.ProductName,
-					Unit:        p.Unit,
-					Shade:       p.Shade,
-					LotNo:       p.LotNo,
-					Remaining:   remaining,
-				})
-			}
-		}
+	response := gin.H{
+		"vendor_id":   bill.Vendor.VendorID,
+		"vendor_name": bill.Vendor.VendorName,
+		"po_number":   bill.Vendor.PONumber,
+		"products":    bill.Products,
 	}
 
-	if available == nil {
-		available = []AvailableProduct{}
-	}
-	c.JSON(http.StatusOK, available)
+	c.JSON(http.StatusOK, response)
 }
 
 // GetAvailableDying returns knitted products that still have qty left to send for dying
+// GetAvailableDying returns knitted products that are available for dying based on the PO number
 func GetAvailableDying(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	jobWorkSubOrderColl := db.Database.Collection("jobwork_suborders")
+	// Get PO number from path parameter
+	poNumber := c.Param("po_number")
+	if poNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "PO number is required"})
+		return
+	}
 
-	// Fetch all knitting_in entries
-	matchKnitting := bson.M{"process_type": "Knitting-In"}
-	cursor, err := jobWorkSubOrderColl.Find(ctx, matchKnitting)
+	// Step 1: Find the job work order by PO number to get in_knitting_qty (max qty available for dying)
+	var jobWorkOrder JobWorkOrder
+	err := jobWorkOrdersColl().FindOne(ctx, bson.M{"po_number": poNumber}).Decode(&jobWorkOrder)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch knitting-in records", "details": err.Error()})
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Job work order not found for the given PO number"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch job work order", "details": err.Error()})
 		return
 	}
 
-	var knittingIn []bson.M
-	if err := cursor.All(ctx, &knittingIn); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode knitting-in", "details": err.Error()})
+	// Step 2: Find all knitting IN suborders for this job work order
+	filter := bson.M{
+		"parent_jobwork_id": jobWorkOrder.ID,
+		"process":           "Knitting",
+		"is_in":             true,
+	}
+
+	cursor, err := jobWorkSubordersColl().Find(ctx, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch knitting suborders", "details": err.Error()})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var knittingSubOrders []JobWorkSubOrder
+	if err := cursor.All(ctx, &knittingSubOrders); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode knitting suborders", "details": err.Error()})
 		return
 	}
 
-	type AvailableProduct struct {
-		ProductID   string  `json:"product_id"`
-		ProductName string  `json:"product_name"`
-		Unit        string  `json:"unit"`
-		Shade       string  `json:"shade"`
-		LotNo       string  `json:"lot_no"`
-		Remaining   float64 `json:"remaining_qty"`
+	// Step 3: Combine quantities from all knitting IN suborders
+	type ProductSummary struct {
+		ProductID   primitive.ObjectID
+		ProductName string
+		Unit        string
+		TotalQty    float64
+		VendorID    *primitive.ObjectID
+		VendorName  string
+		LotNo       string
+		Shade       string
 	}
 
-	var available []AvailableProduct
+	productMap := make(map[primitive.ObjectID]ProductSummary)
 
-	for _, record := range knittingIn {
-		productID := record["product_id"].(string)
-		productName := record["product_name"].(string)
-		unit := record["unit"].(string)
-		shade := record["shade"].(string)
-		lotNo := record["lot_no"].(string)
-		qty := record["issue_qty"].(float64)
-
-		// Get total already sent for dying
-		match := bson.M{"product_id": productID, "process_type": "Dying"}
-		totalSent := struct {
-			Total float64 `bson:"total"`
-		}{}
-		pipeline := mongo.Pipeline{
-			{{Key: "$match", Value: match}},
-			{{Key: "$group", Value: bson.M{"_id": nil, "total": bson.M{"$sum": "$issue_qty"}}}},
-		}
-		cur, _ := jobWorkSubOrderColl.Aggregate(ctx, pipeline)
-		if cur.Next(ctx) {
-			cur.Decode(&totalSent)
-		}
-		cur.Close(ctx)
-
-		remaining := qty - totalSent.Total
-		if remaining > 0 {
-			available = append(available, AvailableProduct{
-				ProductID:   productID,
-				ProductName: productName,
-				Unit:        unit,
-				Shade:       shade,
-				LotNo:       lotNo,
-				Remaining:   remaining,
-			})
+	for _, subOrder := range knittingSubOrders {
+		for _, product := range subOrder.Products {
+			if summary, exists := productMap[product.ProductID]; exists {
+				summary.TotalQty += product.Quantity
+				productMap[product.ProductID] = summary
+			} else {
+				productMap[product.ProductID] = ProductSummary{
+					ProductID:   product.ProductID,
+					ProductName: product.ProductName,
+					Unit:        product.Unit,
+					TotalQty:    product.Quantity,
+					VendorID:    subOrder.VendorID,
+					VendorName:  subOrder.VendorName,
+					LotNo:       product.LotNo,
+					Shade:       product.Shade,
+				}
+			}
 		}
 	}
 
-	c.JSON(http.StatusOK, available)
+	// Step 4: Prepare response with parent ID and combined product information
+	type Response struct {
+		ParentJobWorkID primitive.ObjectID  `json:"parent_jobwork_id"`
+		VendorID        *primitive.ObjectID `json:"vendor_id,omitempty"`
+		VendorName      string              `json:"vendor_name"`
+		Products        []struct {
+			ProductID    primitive.ObjectID `json:"product_id"`
+			ProductName  string             `json:"product_name"`
+			Unit         string             `json:"unit"`
+			AvailableQty float64            `json:"available_qty"`
+			LotNo        string             `json:"lot_no,omitempty"`
+			Shade        string             `json:"shade,omitempty"`
+			MaxQty       float64            `json:"max_qty"` // from in_knitting_qty in parent
+		} `json:"products"`
+	}
+
+	var response Response
+	response.ParentJobWorkID = jobWorkOrder.ID
+	response.Products = make([]struct {
+		ProductID    primitive.ObjectID `json:"product_id"`
+		ProductName  string             `json:"product_name"`
+		Unit         string             `json:"unit"`
+		AvailableQty float64            `json:"available_qty"`
+		LotNo        string             `json:"lot_no,omitempty"`
+		Shade        string             `json:"shade,omitempty"`
+		MaxQty       float64            `json:"max_qty"`
+	}, 0)
+
+	// Get vendor info from the first suborder (assuming same vendor for all)
+	if len(knittingSubOrders) > 0 {
+		response.VendorID = knittingSubOrders[0].VendorID
+		response.VendorName = knittingSubOrders[0].VendorName
+	}
+
+	// Find max qty (in_knitting_qty) from parent order for each product
+	for productID, summary := range productMap {
+		// Find the product in the parent order to get in_knitting_qty
+		var maxQty float64
+		for _, product := range jobWorkOrder.Products {
+			if product.ProductID == productID {
+				maxQty = product.InKnittingQty
+				break
+			}
+		}
+
+		response.Products = append(response.Products, struct {
+			ProductID    primitive.ObjectID `json:"product_id"`
+			ProductName  string             `json:"product_name"`
+			Unit         string             `json:"unit"`
+			AvailableQty float64            `json:"available_qty"`
+			LotNo        string             `json:"lot_no,omitempty"`
+			Shade        string             `json:"shade,omitempty"`
+			MaxQty       float64            `json:"max_qty"`
+		}{
+			ProductID:    productID,
+			ProductName:  summary.ProductName,
+			Unit:         summary.Unit,
+			AvailableQty: summary.TotalQty,
+			LotNo:        summary.LotNo,
+			Shade:        summary.Shade,
+			MaxQty:       maxQty,
+		})
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // ---------- Update SubOrder is_in status ----------
