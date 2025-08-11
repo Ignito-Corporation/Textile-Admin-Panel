@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileDown } from 'lucide-react';
 
-const API_URL = 'http://localhost:8080/api/';
+const API_URL = 'http://localhost:8080/api';
 
 export default function FinalStock() {
     // State for final products

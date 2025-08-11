@@ -1,12 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import FramerIcon from '@/assets/Frame.png'; // Adjust path based on your structure
+import FramerIcon from '@/assets/Frame.png';
 
 export default function StockConversionPage() {
   const [selectedTab, setSelectedTab] = useState("knitting");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchItems = async (process) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`http://localhost:8080/api/jobwork/get-items/${process}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+
+      const data = await res.json();
+      setItems(data);
+    } catch (err) {
+      console.error("Failed to fetch jobwork items:", err);
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch when tab changes
+  useEffect(() => {
+    fetchItems(selectedTab === "dying" ? "Dyeing" : "Knitting");
+  }, [selectedTab]);
 
   return (
     <div className="bg-white pl-2 pr-2 w-full overflow-auto pb-10">
@@ -45,11 +74,11 @@ export default function StockConversionPage() {
         </div>
       </div>
 
-      {/* Table Template */}
+      {/* Table */}
       {["knitting", "dying"].includes(selectedTab) && (
         <div className="overflow-x-auto border rounded-xl">
           <Table>
-            <TableHeader className="bg-[#2C3E50] text-white  text-sm">
+            <TableHeader className="bg-[#2C3E50] text-white text-sm">
               <TableRow className="py-4 h-16 hover:bg-slate-900"> 
                 <TableHead className="text-white px-4 py-3">Product Name</TableHead>
                 <TableHead className="text-white px-4 py-3">Unit</TableHead>
@@ -64,13 +93,34 @@ export default function StockConversionPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {Array.from({ length: 10 }).map((_, i) => (
-                <TableRow key={i} className="text-center text-sm text-gray-500">
-                  {Array.from({ length: 10 }).map((_, j) => (
-                    <TableCell key={j} className="py-4">-</TableCell>
-                  ))}
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center py-6 text-gray-500">
+                    Loading...
+                  </TableCell>
                 </TableRow>
-              ))}
+              ) : items.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center py-6 text-gray-500">
+                    No data found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                items.map((item, i) => (
+                  <TableRow key={i} className="text-center text-sm text-gray-500">
+                    <TableCell>{item.product_name}</TableCell>
+                    <TableCell>{item.unit}</TableCell>
+                    <TableCell>{item.issued_qty || "-"}</TableCell>
+                    <TableCell>{item.date_out || "-"}</TableCell>
+                    <TableCell>-</TableCell>
+                    <TableCell>-</TableCell>
+                    <TableCell>{item.vendor_no || "-"}</TableCell>
+                    <TableCell>{item.vendorname || "-"}</TableCell>
+                    <TableCell>{item.max_qty || "-"}</TableCell>
+                    <TableCell>-</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
@@ -78,7 +128,7 @@ export default function StockConversionPage() {
 
       <div className="mt-4">
         <Button className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 text-md font-medium rounded-md">
-           <img src={FramerIcon} alt="PDF" className="w-5 h-5" />
+          <img src={FramerIcon} alt="PDF" className="w-5 h-5" />
           Generate Pdf
         </Button>
       </div>

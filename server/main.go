@@ -2,13 +2,51 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"textile-admin-panel/db"
 	"textile-admin-panel/routes"
-	"time"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
+
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		allowedOrigins := []string{
+			"http://localhost:5173", // Local frontend
+			"http://localhost:8080",
+			"https://your-vercel-app.vercel.app", // Prod frontend
+		}
+
+		origin := c.Request.Header.Get("Origin")
+		allowOrigin := ""
+		for _, o := range allowedOrigins {
+			if o == origin {
+				allowOrigin = o
+				break
+			}
+		}
+
+		// If no match, you can comment this to block unknown origins
+		if allowOrigin == "" {
+			allowOrigin = "*" // for open access, but remove if you want strict security
+		}
+
+		c.Writer.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+		c.Writer.Header().Set("Vary", "Origin")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, Accept, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Expose-Headers", "*")
+
+		// Handle preflight OPTIONS
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	}
+}
 
 func main() {
 	if db.ConnectMongoDB() {
@@ -19,14 +57,7 @@ func main() {
 
 	r := gin.Default()
 
-	r.Use(cors.New(cors.Config{
-		AllowAllOrigins:  true,
-		AllowMethods:     []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
+	r.Use(CORSMiddleware())
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "Hello World"})
@@ -62,6 +93,8 @@ func main() {
 		jobwork.POST("/out-entry", routes.CreateOutEntry)
 		jobwork.GET("/out-entries/po/:poNumber", routes.GetOutEntriesByPO)
 		jobwork.POST("/receive-product", routes.MarkAsReceived)
+		jobwork.GET("/get-items/:process", routes.GetJobworkItemsByProcess)
+
 	}
 
 	// Master Data Routes

@@ -243,3 +243,49 @@ func CreateOutEntry(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Out entry created successfully", "out_entry_id": result})
 }
+
+func GetJobworkItemsByProcess(c *gin.Context) {
+	process := c.Param("process")
+
+	// Normalize process case
+	if process != "Knitting" && process != "Dyeing" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid process. Must be 'Knitting' or 'Dyeing'.",
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	collection := db.Database.Collection("out_entries")
+
+	filter := bson.M{"process": process}
+
+	cursor, err := collection.Find(ctx, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to fetch jobwork items",
+			"details": err.Error(),
+		})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var results []OutEntry
+	if err := cursor.All(ctx, &results); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to decode jobwork items",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Flatten into just the products for the given process
+	var products []OutEntryProduct
+	for _, entry := range results {
+		products = append(products, entry.Products...)
+	}
+
+	c.JSON(http.StatusOK, products)
+}
