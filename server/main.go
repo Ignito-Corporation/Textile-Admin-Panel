@@ -70,7 +70,8 @@ func main() {
 		jobwork.GET("/available-knitting/:po_number", routes.GetAvailableKnitting)
 		jobwork.GET("/available-dying/:po_number", routes.GetAvailableDying) // Changed to match knitting endpoint pattern
 
-		jobwork.PATCH("/suborder/:voucher/is_in", routes.UpdateSubOrderIsInStatus)
+		jobwork.POST("/suborder/is-in/:identifier", routes.UpdateSubOrderIsInStatus)
+		jobwork.GET("/getjobworkin/:identifier", routes.GetProductsForInEntry)
 	}
 
 	//Master Data Routes

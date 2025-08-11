@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 
 	"textile-admin-panel/db"
@@ -729,33 +730,425 @@ func GetAvailableDying(c *gin.Context) {
 }
 
 // ---------- Update SubOrder is_in status ----------
+// UpdateSubOrderIsInStatus updates suborder status and parent order quantities
+// Accepts either PO number (starts with "PO") or voucher number (starts with "OUT")
 func UpdateSubOrderIsInStatus(c *gin.Context) {
-	voucher := c.Param("voucher")
-	if voucher == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "voucher required"})
+	identifier := c.Param("identifier")
+	if identifier == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "PO number or voucher number required"})
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Update the is_in status to true
-	update := bson.M{"$set": bson.M{"is_in": true}}
-	result, err := jobWorkSubordersColl().UpdateOne(
-		ctx,
-		bson.M{"voucher_number": voucher},
-		update,
-	)
-
+	client := db.Database.Client()
+	session, err := client.StartSession()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update suborder", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start db session", "details": err.Error()})
+		return
+	}
+	defer session.EndSession(ctx)
+
+	callback := func(sessCtx mongo.SessionContext) (interface{}, error) {
+		var subOrder JobWorkSubOrder
+		var parentOrder JobWorkOrder
+		var processToUpdate string
+
+		// Determine if identifier is PO number or voucher number
+		if strings.HasPrefix(identifier, "PO") {
+			// Case 1: PO number provided
+			err := jobWorkOrdersColl().FindOne(sessCtx, bson.M{"po_number": identifier}).Decode(&parentOrder)
+			if err != nil {
+				return nil, fmt.Errorf("parent jobwork order not found for PO: %s", identifier)
+			}
+
+			// Find the latest OUT suborder for this parent that isn't marked as IN yet
+			// Priority: Dyeing > Knitting
+			filter := bson.M{
+				"parent_jobwork_id": parentOrder.ID,
+				"is_in":             false,
+				"entry_type":        "OUT",
+			}
+
+			// First try to find a Dyeing process
+			filter["process"] = "Dyeing"
+			err = jobWorkSubordersColl().FindOne(
+				sessCtx,
+				filter,
+				options.FindOne().SetSort(bson.M{"created_at": -1}),
+			).Decode(&subOrder)
+
+			if err != nil {
+				// If no Dyeing found, try Knitting
+				filter["process"] = "Knitting"
+				err = jobWorkSubordersColl().FindOne(
+					sessCtx,
+					filter,
+					options.FindOne().SetSort(bson.M{"created_at": -1}),
+				).Decode(&subOrder)
+				if err != nil {
+					return nil, fmt.Errorf("no OUT suborders found for PO: %s that aren't already IN", identifier)
+				}
+				processToUpdate = "Knitting"
+			} else {
+				processToUpdate = "Dyeing"
+			}
+		} else if strings.HasPrefix(identifier, "OUT") {
+			// Case 2: Voucher number provided
+			err := jobWorkSubordersColl().FindOne(sessCtx, bson.M{"voucher_number": identifier}).Decode(&subOrder)
+			if err != nil {
+				return nil, fmt.Errorf("suborder not found for voucher: %s", identifier)
+			}
+
+			if subOrder.IsIn {
+				return nil, fmt.Errorf("suborder %s is already marked as IN", identifier)
+			}
+			if subOrder.EntryType != "OUT" {
+				return nil, fmt.Errorf("suborder %s is not an OUT entry", identifier)
+			}
+
+			processToUpdate = subOrder.Process
+
+			// Get the parent order
+			err = jobWorkOrdersColl().FindOne(sessCtx, bson.M{"_id": subOrder.ParentJobWorkID}).Decode(&parentOrder)
+			if err != nil {
+				return nil, fmt.Errorf("parent jobwork order not found for suborder")
+			}
+		} else {
+			return nil, fmt.Errorf("identifier must start with 'PO' (PO number) or 'OUT' (voucher number)")
+		}
+
+		// Update the suborder to mark as IN
+		update := bson.M{"$set": bson.M{"is_in": true}}
+		result, err := jobWorkSubordersColl().UpdateOne(
+			sessCtx,
+			bson.M{"_id": subOrder.ID},
+			update,
+		)
+		if err != nil || result.MatchedCount == 0 {
+			return nil, fmt.Errorf("failed to update suborder status")
+		}
+
+		// Track if all products will be completed after this update
+		allProductsCompleted := true
+		productsToComplete := make(map[primitive.ObjectID]bool)
+
+		// Update the parent order quantities and stage
+		for _, subProduct := range subOrder.Products {
+			// Find the corresponding product in the parent order
+			for _, parentProduct := range parentOrder.Products {
+				if parentProduct.ProductID == subProduct.ProductID {
+					// Prepare update for this product
+					update := bson.M{}
+					incField := ""
+					setFields := bson.M{}
+
+					switch processToUpdate {
+					case "Knitting":
+						incField = "in_knitting_qty"
+						setFields["remaining_qty"] = parentProduct.OutKnittingQty - (parentProduct.InKnittingQty + subProduct.Quantity)
+						if parentProduct.InKnittingQty+subProduct.Quantity >= parentProduct.ExpectedQty {
+							setFields["current_stage"] = "Dyeing"
+						}
+					case "Dyeing":
+						incField = "in_dyeing_qty"
+						setFields["remaining_qty"] = parentProduct.OutDyeingQty - (parentProduct.InDyeingQty + subProduct.Quantity)
+
+						// For Dyeing IN, mark as completed if we've received all expected quantity
+						if parentProduct.InDyeingQty+subProduct.Quantity >= parentProduct.ExpectedQty ||
+							parentProduct.InDyeingQty+subProduct.Quantity >= parentProduct.OutDyeingQty {
+							setFields["current_stage"] = "Completed"
+							productsToComplete[parentProduct.ProductID] = true
+						} else {
+							allProductsCompleted = false
+						}
+					}
+
+					if incField != "" {
+						update["$inc"] = bson.M{fmt.Sprintf("products.$[p].%s", incField): subProduct.Quantity}
+					}
+					if len(setFields) > 0 {
+						update["$set"] = bson.M{}
+						for k, v := range setFields {
+							update["$set"].(bson.M)[fmt.Sprintf("products.$[p].%s", k)] = v
+						}
+					}
+
+					// Apply the update with array filter
+					arrayFilter := options.Update().SetArrayFilters(options.ArrayFilters{
+						Filters: []interface{}{bson.M{"p.product_id": subProduct.ProductID}},
+					})
+
+					if _, err := jobWorkOrdersColl().UpdateOne(
+						sessCtx,
+						bson.M{"_id": parentOrder.ID},
+						update,
+						arrayFilter,
+					); err != nil {
+						return nil, fmt.Errorf("failed to update parent order quantities: %w", err)
+					}
+					break
+				}
+			}
+		}
+
+		// For Dyeing process, check if all products are being completed
+		if processToUpdate == "Dyeing" {
+			// Verify all products in the suborder are being completed
+			for _, subProduct := range subOrder.Products {
+				if !productsToComplete[subProduct.ProductID] {
+					allProductsCompleted = false
+					break
+				}
+			}
+
+			// Additionally verify all products in parent order are completed
+			if allProductsCompleted {
+				var updatedParent JobWorkOrder
+				if err := jobWorkOrdersColl().FindOne(sessCtx, bson.M{"_id": parentOrder.ID}).Decode(&updatedParent); err != nil {
+					return nil, fmt.Errorf("failed to verify parent completion status: %w", err)
+				}
+
+				for _, p := range updatedParent.Products {
+					if p.CurrentStage != "Completed" {
+						allProductsCompleted = false
+						break
+					}
+				}
+			}
+		}
+
+		// Mark parent order as complete if all products are completed
+		if allProductsCompleted && !parentOrder.IsComplete {
+			if _, err := jobWorkOrdersColl().UpdateOne(
+				sessCtx,
+				bson.M{"_id": parentOrder.ID},
+				bson.M{"$set": bson.M{"is_complete": true}},
+			); err != nil {
+				return nil, fmt.Errorf("failed to mark parent complete: %w", err)
+			}
+		}
+
+		return gin.H{
+			"message":            "Suborder updated successfully",
+			"voucher_number":     subOrder.VoucherNumber,
+			"parent_jobwork_id":  parentOrder.ID.Hex(),
+			"updated_process":    processToUpdate,
+			"updated_quantities": len(subOrder.Products),
+			"order_completed":    allProductsCompleted,
+		}, nil
+	}
+
+	result, err := session.WithTransaction(ctx, callback)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to update suborder", "details": err.Error()})
 		return
 	}
 
-	if result.MatchedCount == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "voucher not found"})
+	c.JSON(http.StatusOK, result)
+}
+
+// GetProductsForInEntry returns products that can be marked as IN, either by PO number or voucher number
+func GetProductsForInEntry(c *gin.Context) {
+	identifier := c.Param("identifier")
+	if identifier == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "identifier (PO or voucher number) required"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Suborder updated", "voucher": voucher})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var response struct {
+		ParentJobWorkID primitive.ObjectID  `json:"parent_jobwork_id"`
+		VendorID        *primitive.ObjectID `json:"vendor_id,omitempty"`
+		VendorName      string              `json:"vendor_name"`
+		Process         string              `json:"process"`
+		Products        []struct {
+			ProductID    primitive.ObjectID `json:"product_id"`
+			ProductName  string             `json:"product_name"`
+			Unit         string             `json:"unit"`
+			LotNo        string             `json:"lot_no,omitempty"`
+			Shade        string             `json:"shade,omitempty"`
+			IssuedQty    float64            `json:"issued_qty"`    // Original OUT quantity
+			ReceivedQty  float64            `json:"received_qty"`  // Already received quantity (IN)
+			AvailableQty float64            `json:"available_qty"` // Quantity available to receive (IssuedQty - ReceivedQty)
+			MaxQty       float64            `json:"max_qty"`       // Maximum quantity that can be received (for validation)
+		} `json:"products"`
+	}
+
+	// Case 1: Voucher number provided (starts with "OUT")
+	if strings.HasPrefix(identifier, "OUT") {
+		var subOrder JobWorkSubOrder
+		if err := jobWorkSubordersColl().FindOne(ctx, bson.M{"voucher_number": identifier}).Decode(&subOrder); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "suborder not found"})
+			return
+		}
+
+		// Validate it's an OUT entry
+		if subOrder.EntryType != "OUT" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "only OUT entries can be marked as IN"})
+			return
+		}
+
+		// Validate it's not already marked as IN
+		if subOrder.IsIn {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "suborder is already marked as IN"})
+			return
+		}
+
+		// Get the parent order to get current quantities
+		var parentOrder JobWorkOrder
+		if err := jobWorkOrdersColl().FindOne(ctx, bson.M{"_id": subOrder.ParentJobWorkID}).Decode(&parentOrder); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get parent order"})
+			return
+		}
+
+		response.ParentJobWorkID = parentOrder.ID
+		response.VendorID = subOrder.VendorID
+		response.VendorName = subOrder.VendorName
+		response.Process = subOrder.Process
+
+		// Prepare products with available quantities
+		for _, subProduct := range subOrder.Products {
+			// Find the product in parent order to get current quantities
+			var issuedQty, receivedQty, maxQty float64
+			for _, parentProduct := range parentOrder.Products {
+				if parentProduct.ProductID == subProduct.ProductID {
+					switch subOrder.Process {
+					case "Knitting":
+						issuedQty = parentProduct.OutKnittingQty
+						receivedQty = parentProduct.InKnittingQty
+						maxQty = parentProduct.OutKnittingQty - parentProduct.InKnittingQty
+					case "Dyeing":
+						issuedQty = parentProduct.OutDyeingQty
+						receivedQty = parentProduct.InDyeingQty
+						maxQty = parentProduct.OutDyeingQty - parentProduct.InDyeingQty
+					}
+					break
+				}
+			}
+
+			response.Products = append(response.Products, struct {
+				ProductID    primitive.ObjectID `json:"product_id"`
+				ProductName  string             `json:"product_name"`
+				Unit         string             `json:"unit"`
+				LotNo        string             `json:"lot_no,omitempty"`
+				Shade        string             `json:"shade,omitempty"`
+				IssuedQty    float64            `json:"issued_qty"`
+				ReceivedQty  float64            `json:"received_qty"`
+				AvailableQty float64            `json:"available_qty"`
+				MaxQty       float64            `json:"max_qty"`
+			}{
+				ProductID:    subProduct.ProductID,
+				ProductName:  subProduct.ProductName,
+				Unit:         subProduct.Unit,
+				LotNo:        subProduct.LotNo,
+				Shade:        subProduct.Shade,
+				IssuedQty:    issuedQty,
+				ReceivedQty:  receivedQty,
+				AvailableQty: maxQty,
+				MaxQty:       maxQty,
+			})
+		}
+
+		c.JSON(http.StatusOK, response)
+		return
+	}
+
+	// Case 2: PO number provided (starts with "PO")
+	if strings.HasPrefix(identifier, "PO") {
+		var parentOrder JobWorkOrder
+		if err := jobWorkOrdersColl().FindOne(ctx, bson.M{"po_number": identifier}).Decode(&parentOrder); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "jobwork order not found for PO"})
+			return
+		}
+
+		response.ParentJobWorkID = parentOrder.ID
+
+		// Determine which process to use (prefer Dyeing over Knitting)
+		process := ""
+		for _, product := range parentOrder.Products {
+			if product.OutDyeingQty > 0 && product.InDyeingQty < product.OutDyeingQty {
+				process = "Dyeing"
+				break
+			} else if product.OutKnittingQty > 0 && product.InKnittingQty < product.OutKnittingQty {
+				process = "Knitting"
+			}
+		}
+
+		if process == "" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "no products available for IN entry"})
+			return
+		}
+
+		response.Process = process
+
+		// Find the latest OUT suborder for this process to get vendor info
+		var subOrder JobWorkSubOrder
+		filter := bson.M{
+			"parent_jobwork_id": parentOrder.ID,
+			"process":           process,
+			"entry_type":        "OUT",
+			"is_in":             false,
+		}
+		opts := options.FindOne().SetSort(bson.M{"created_at": -1})
+		if err := jobWorkSubordersColl().FindOne(ctx, filter, opts).Decode(&subOrder); err == nil {
+			response.VendorID = subOrder.VendorID
+			response.VendorName = subOrder.VendorName
+		}
+
+		// Prepare products with available quantities
+		for _, product := range parentOrder.Products {
+			var issuedQty, receivedQty, maxQty float64
+
+			switch process {
+			case "Knitting":
+				if product.OutKnittingQty <= 0 || product.InKnittingQty >= product.OutKnittingQty {
+					continue // Skip products not available for this process
+				}
+				issuedQty = product.OutKnittingQty
+				receivedQty = product.InKnittingQty
+				maxQty = product.OutKnittingQty - product.InKnittingQty
+			case "Dyeing":
+				if product.OutDyeingQty <= 0 || product.InDyeingQty >= product.OutDyeingQty {
+					continue // Skip products not available for this process
+				}
+				issuedQty = product.OutDyeingQty
+				receivedQty = product.InDyeingQty
+				maxQty = product.OutDyeingQty - product.InDyeingQty
+			}
+
+			response.Products = append(response.Products, struct {
+				ProductID    primitive.ObjectID `json:"product_id"`
+				ProductName  string             `json:"product_name"`
+				Unit         string             `json:"unit"`
+				LotNo        string             `json:"lot_no,omitempty"`
+				Shade        string             `json:"shade,omitempty"`
+				IssuedQty    float64            `json:"issued_qty"`
+				ReceivedQty  float64            `json:"received_qty"`
+				AvailableQty float64            `json:"available_qty"`
+				MaxQty       float64            `json:"max_qty"`
+			}{
+				ProductID:    product.ProductID,
+				ProductName:  product.ProductName,
+				Unit:         product.Unit,
+				IssuedQty:    issuedQty,
+				ReceivedQty:  receivedQty,
+				AvailableQty: maxQty,
+				MaxQty:       maxQty,
+			})
+		}
+
+		if len(response.Products) == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "no products available for IN entry"})
+			return
+		}
+
+		c.JSON(http.StatusOK, response)
+		return
+	}
+
+	c.JSON(http.StatusBadRequest, gin.H{"error": "identifier must start with 'PO' or 'OUT'"})
 }
