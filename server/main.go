@@ -50,6 +50,7 @@ func main() {
 		bill.GET("/", routes.GetAllBills)
 		bill.GET("/summary", routes.GetBillSummary)
 		bill.GET("/:id", routes.GetBillByID)
+		bill.GET("/po/:poNumber", routes.GetBillByPONumber)
 	}
 
 	//PDF Handler
@@ -58,20 +59,7 @@ func main() {
 	//Jobwork Endpoint
 	jobwork := r.Group("/api/jobwork")
 	{
-		jobwork.POST("/order", routes.CreateJobWorkOrder)
-		jobwork.POST("/suborder", routes.CreateJobWorkSubOrder)
-		jobwork.GET("/suborder/voucher/:voucher", routes.GetJobWorkSubOrderByVoucher)
-		jobwork.GET("/order/:id", routes.GetJobWorkOrder)
-		jobwork.GET("/suborders", routes.ListJobWorkSubOrders)
-		jobwork.GET("/completed-products", routes.GetCompletedFinalProducts)
-		jobwork.GET("/out-products", routes.GetOutProducts)
-
-		// Corrected routes to match frontend usage
-		jobwork.GET("/available-knitting/:po_number", routes.GetAvailableKnitting)
-		jobwork.GET("/available-dying/:po_number", routes.GetAvailableDying) // Changed to match knitting endpoint pattern
-
-		jobwork.POST("/suborder/is-in/:identifier", routes.UpdateSubOrderIsInStatus)
-		jobwork.GET("/getjobworkin/:identifier", routes.GetProductsForInEntry)
+		jobwork.POST("/out-entry", routes.CreateOutEntry)
 	}
 
 	//Master Data Routes

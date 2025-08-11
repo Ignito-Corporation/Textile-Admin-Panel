@@ -72,7 +72,8 @@ func CreateBillEntry(c *gin.Context) {
 
 	for i := range bill.Products {
 		bill.Products[i].MaxQty = bill.Products[i].Quantity
-		bill.Products[i].Knitting = false
+		// The `knitting` field should be sent from the frontend.
+		// If not provided, it defaults to false (for Knitting process).
 	}
 
 	bill.CreatedAt = time.Now() // Set creation timestamp
@@ -132,6 +133,34 @@ func GetBillByID(c *gin.Context) {
 	c.JSON(http.StatusOK, bill)
 }
 
+// GetBillByPONumber fetches a single bill by its PO Number.
+func GetBillByPONumber(c *gin.Context) {
+	poNumber := c.Param("poNumber")
+	if poNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "PO Number is required"})
+		return
+	}
+
+	collection := db.Database.Collection("purchase_bills")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var bill PurchaseBill
+	// Find where the 'vendor.ponumber' field matches.
+	err := collection.FindOne(ctx, bson.M{"vendor.ponumber": poNumber}).Decode(&bill)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Bill not found for the given PO Number"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch bill", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, bill)
+}
+
+// GetBillSummary provides a summary of bill statistics.
 func GetBillSummary(c *gin.Context) {
 	collection := db.Database.Collection("purchase_bills")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

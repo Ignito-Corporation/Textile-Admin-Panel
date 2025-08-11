@@ -15,282 +15,192 @@ import { CirclePlus } from 'lucide-react';
 
 const CreateOutEntry = () => {
   const [entryType, setEntryType] = useState('');
-  const [vendor, setVendor] = useState('');
   const [vendorName, setVendorName] = useState('');
-  const [products, setProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
   const [issuedQuantities, setIssuedQuantities] = useState({});
   const [poNumber, setPoNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [FpoNum, setFpoNum] = useState('');
-  const [parentJobWorkId, setParentJobWorkId] = useState(''); // State to hold parent JobWorkOrder ID
+  const [fpoNumber, setFpoNumber] = useState('');
+  const [voucherNo, setVoucherNo] = useState('');
+  const [dateOut, setDateOut] = useState(new Date().toISOString().split('T')[0]);
 
-  // Fetch vendor and products when PO number changes and entry type is set
+  // Fetch data when PO number changes
   useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      if (!entryType || !poNumber) {
-        setProducts([]);
-        setIssuedQuantities({}); // Clear issued quantities
-        setVendor('');
+    const fetchBillData = async () => {
+      if (!poNumber) {
+        setAllProducts([]);
         setVendorName('');
-        setParentJobWorkId(''); 
         return;
       }
-
-      const fetchData = async () => {
-        setIsLoading(true);
-        try {
-          let url = '';
-          if (entryType === 'Knitting') {
-            url = `http://localhost:8080/api/jobwork/available-knitting/${poNumber}`;
+      setIsLoading(true);
+      try {
+        const response = await fetch(`http://localhost:8080/api/purchase-bill/po/${poNumber}`);
+        if (!response.ok) {
+          if (response.status === 404) {
+             alert('No bill found for this PO Number.');
+             setAllProducts([]);
+             setVendorName('');
           } else {
-            url = `http://localhost:8080/api/jobwork/available-dying/${poNumber}`;
-          }
-
-          const response = await fetch(url);
-          if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
           }
-          const data = await response.json();
-          console.log("Fetched data:", data);
-
-          if (entryType === 'Dyeing') {
-            if (data) {
-              setParentJobWorkId(data.parent_jobwork_id || '');
-              setVendor(data.vendor_id || '');
-              setVendorName(data.vendor_name || '');
-              
-              const transformedProducts = data.products?.map(product => ({
-                product_id: product.product_id,
-                product_name: product.product_name,
-                unit: product.unit,
-                shade: product.shade,
-                lot_no: product.lot_no,
-                // ⭐ FIX for Dyeing: Use available_qty for remaining and max_qty directly
-                remaining_qty: product.available_qty, 
-                max_qty: product.max_qty 
-              })) || [];
-              
-              setProducts(transformedProducts);
-            }
-          } else { // entryType === 'Knitting'
-            if (data && data.bill && data.bill.length > 0) { // Check for the new 'bill' structure
-              const billData = data.bill[0]; // Assuming only one bill per PO for simplicity
-              
-              // Set vendor details from the bill
-              setVendor(billData.vendor.vendor_id || '');
-              setVendorName(billData.vendor.vendor_name || '');
-              
-              const totalRemainingFromBackend = data.remaining_qty; // This is the aggregated remaining_qty
-              
-              const transformedProducts = billData.products?.map(product => {
-                let displayedRemainingQty = product.quantity; // Default to PurchaseBill quantity
-                let displayedMaxQty = product.quantity;      // Default to PurchaseBill quantity
-
-                // ⭐ FIX for Knitting: Use aggregated remaining_qty if it's less than product.quantity
-                // This heuristic works best for single-product bills where `data.remaining_qty` applies to that one product.
-                if (totalRemainingFromBackend !== undefined && 
-                    totalRemainingFromBackend < product.quantity &&
-                    billData.products.length === 1 
-                ) {
-                    displayedRemainingQty = totalRemainingFromBackend;
-                    // MaxQty should still reflect the original total from Purchase Bill as ExpectedQty
-                    // in this scenario, as the JWO 'ExpectedQty' is derived from it.
-                    displayedMaxQty = product.quantity; 
-                } else if (billData.products.length > 1 && totalRemainingFromBackend !== undefined) {
-                    // If multiple products, and totalRemainingFromBackend is less than *total* purchase quantity,
-                    // a more complex distribution logic might be needed here if per-product remaining is critical.
-                    // For now, if multiple products, we default to showing individual purchase quantities.
-                    // Or, if there is a way to get JWO per-product remaining, it should be done in backend API.
-                    // For this fix, stick to purchase bill quantity if complex JWO merging isn't provided.
-                }
-
-                return {
-                  product_id: product.product_id, 
-                  product_name: product.product_name,
-                  unit: product.unit,
-                  shade: product.shade || '-', 
-                  lot_no: product.lot_no || '-', 
-                  max_qty: displayedMaxQty,       // Dynamically set based on logic
-                  remaining_qty: displayedRemainingQty, // Dynamically set based on logic
-                  mill_name: product.mill_name || '-',
-                  rate: product.rate || 0,
-                  gst_percent: product.gst_percent || 0,
-                  amount: product.amount || 0,
-                  gst_amount: product.gst_amount || 0, 
-                  delivery_status: '-', 
-                };
-              }) || [];
-              
-              setProducts(transformedProducts);
-
-            } else {
-              setProducts([]);
-              setVendor('');
-              setVendorName('');
-              setParentJobWorkId('');
-            }
-          }
-        } catch (err) {
-          console.error('Error fetching data:', err);
-          setProducts([]);
-          setIssuedQuantities({}); 
-          setVendor('');
-          setVendorName('');
-          setParentJobWorkId('');
-          alert(`Error: ${err.message}`);
-        } finally {
-          setIsLoading(false);
+          return;
         }
-      };
+        const data = await response.json();
+        console.log("Fetched Bill Data:", data);
+        
+        setVendorName(data?.vendor?.vendor_name || '');
+        setAllProducts(data.products || []);
 
-      fetchData();
+      } catch (err) {
+        console.error('Error fetching bill data:', err);
+        alert(`Error fetching bill data: ${err.message}`);
+        setAllProducts([]);
+        setVendorName('');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(() => {
+        fetchBillData();
     }, 500);
 
     return () => clearTimeout(debounceTimer);
-  }, [entryType, poNumber]);
+  }, [poNumber]);
 
-  const handleQtyChange = (productId, value, remaining) => {
-    let val = parseFloat(value) || 0;
-    if (val < 0) val = 0;
-    if (val > remaining) val = remaining; 
-    setIssuedQuantities(prev => ({
-      ...prev,
-      [productId]: val,
-    }));
+  useEffect(() => {
+    if (!entryType) {
+      setFilteredProducts([]);
+      return;
+    }
+
+    const filterLogic = (product) => {
+      if (entryType === 'Knitting') {
+        return product.knitting === false;
+      }
+      if (entryType === 'Dyeing') {
+        return product.knitting === true;
+      }
+      return false;
+    };
+
+    const newFilteredProducts = allProducts.filter(filterLogic);
+    setFilteredProducts(newFilteredProducts);
+    setIssuedQuantities({});
+
+  }, [entryType, allProducts]);
+
+
+  const handleQtyChange = (index, value, maxQty) => {
+    const val = parseFloat(value);
+    if (isNaN(val) || val < 0) {
+      setIssuedQuantities(prev => ({ ...prev, [index]: 0 }));
+    } else if (val > maxQty) {
+      alert(`Issued quantity cannot be more than Available Qty (${maxQty})`);
+      setIssuedQuantities(prev => ({ ...prev, [index]: maxQty }));
+    } else {
+      setIssuedQuantities(prev => ({ ...prev, [index]: val }));
+    }
   };
 
+
   const handleSave = async () => {
-    const selectedProducts = products
-      .filter(p => issuedQuantities[p.product_id] > 0)
+    const productsToSave = filteredProducts
+      .map((p, index) => ({ ...p, index }))
+      .filter(p => issuedQuantities[p.index] > 0)
       .map(p => ({
         product_id: p.product_id,
         product_name: p.product_name,
         unit: p.unit,
-        lot_no: p.lot_no || '',
-        shade: p.shade || '',
-        quantity: issuedQuantities[p.product_id], // This is the 'issued' quantity
-        remaining_qty: p.remaining_qty, // Pass the original remaining_qty for backend validation
-        max_qty: p.max_qty // Ensure max_qty is carried into the selectedProducts array
+        lot_no: p.lot_no,
+        shade: p.shade,
+        mill_name: p.mill_name,
+        issued_qty: issuedQuantities[p.index],
+        max_qty: p.max_qty,
+        rate: p.rate,
+        gst_percent: p.gst_percent,
+        amount: p.rate * issuedQuantities[p.index],
+        gst_amount: (p.rate * issuedQuantities[p.index] * p.gst_percent) / 100,
       }));
 
     if (!vendorName) {
-      alert('Please select a vendor (should be auto-filled with PO number)');
+      alert('Please enter a valid PO number to fetch vendor details.');
       return;
     }
-
-    if (selectedProducts.length === 0) {
-      alert('Please enter at least one issued quantity');
+    if (productsToSave.length === 0) {
+      alert('Please enter an issued quantity for at least one product.');
       return;
     }
-
-    // Validate quantities don't exceed remaining
-    for (const product of selectedProducts) {
-      if (product.quantity > product.remaining_qty) {
-        alert(`Cannot issue more than remaining quantity for ${product.product_name}`);
+    if (!fpoNumber) {
+        alert('Please enter an FPO Number.');
         return;
-      }
     }
 
+    setIsLoading(true);
     try {
-      let currentParentJobWorkId = parentJobWorkId;
-
-      if (entryType === 'Knitting') {
-        if (!currentParentJobWorkId) { 
-          const parentOrderResponse = await fetch('http://localhost:8080/api/jobwork/order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              po_number: poNumber || "", 
-              purchase_bill_id: null, 
-              products: selectedProducts.map(p => ({
-                product_id: p.product_id,
-                product_name: p.product_name,
-                unit: p.unit,
-                expected_qty: p.max_qty 
-              }))
-            }),
-          });
-
-          const parentOrderData = await parentOrderResponse.json();
-          if (!parentOrderResponse.ok) {
-            throw new Error(parentOrderData.error || 'Failed to create parent order');
-          }
-          currentParentJobWorkId = parentOrderData.order_id;
-          console.log('Created new parent order:', currentParentJobWorkId);
-        }
-      }
-
-      if (entryType === 'Dyeing' && !currentParentJobWorkId) {
-        alert('Missing parent job work ID for dyeing process. Please ensure the PO number is correct.');
-        return;
-      }
-
-      const subOrderResponse = await fetch('http://localhost:8080/api/jobwork/suborder', {
+      const response = await fetch('http://localhost:8080/api/jobwork/out-entry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          parent_jobwork_id: currentParentJobWorkId,
-          entry_type: 'OUT',
+          po_number: poNumber,
           process: entryType,
-          vendor_id: vendor,
           vendor_name: vendorName,
-          products: selectedProducts,
-          fpo_number: FpoNum,
-          remarks: null,
-          created_by: "Vendor",
+          products: productsToSave,
+          fpo_number: fpoNumber,
+          voucher_no: voucherNo,
+          date_out: dateOut,
+          date_in: "",
         }),
       });
 
-      const subOrderData = await subOrderResponse.json();
-      if (!subOrderResponse.ok) {
-        throw new Error(subOrderData.error || 'Failed to create suborder');
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to save out entry');
       }
 
-      console.log('Saved:', subOrderData);
       alert('Out Entry created successfully!');
-      // Reset form fields after successful save
-      setIssuedQuantities({});
-      setProducts([]);
       setPoNumber('');
-      setVendor('');
-      setVendorName('');
-      setFpoNum('');
-      setParentJobWorkId('');
       setEntryType('');
+      setAllProducts([]);
+      setFilteredProducts([]);
+      setIssuedQuantities({});
+      setVendorName('');
+      setFpoNumber('');
+      setVoucherNo('');
+
     } catch (err) {
       console.error('Error saving:', err);
       alert(`Error: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
-  };
-
-  const getColSpan = () => {
-    if (entryType === 'Knitting') {
-      return 9; 
-    } else if (entryType === 'Dyeing') {
-      return 9; 
-    }
-    return 7; 
   };
 
   return (
     <div className="p-6 bg-white min-h-screen">
-      {/* Top Bar */}
       <div className="flex items-center justify-between bg-[#2C3E50] text-white px-6 py-4 rounded-t-md shadow">
         <h1 className="text-lg font-semibold flex items-center gap-2">
-          <CirclePlus className="w-6 h-6 text-white bg-[#2C3E50] rounded-full" />
+          <CirclePlus className="w-6 h-6" />
           Create Out Entry
         </h1>
         <Button variant="secondary">← Back</Button>
       </div>
 
-      {/* Form Fields */}
       <div className="mt-6">
         <h2 className="text-lg font-semibold mb-4">Out Entry Details</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Entry Type */}
+          <div>
+            <Label className="mb-1 block">PO Number</Label>
+            <Input
+              placeholder="Enter PO Number"
+              value={poNumber}
+              onChange={(e) => setPoNumber(e.target.value)}
+            />
+          </div>
           <div>
             <Label className="mb-1 block">Entry Type</Label>
-            <Select onValueChange={setEntryType} value={entryType}>
+            <Select onValueChange={setEntryType} value={entryType} disabled={!poNumber}>
               <SelectTrigger>
                 <SelectValue placeholder="Select Entry Type" />
               </SelectTrigger>
@@ -300,126 +210,72 @@ const CreateOutEntry = () => {
               </SelectContent>
             </Select>
           </div>
-
-          {/* PO Number */}
-          <div>
-            <Label className="mb-1 block">PO Number</Label>
-            <Input 
-              placeholder="Enter PO Number" 
-              value={poNumber}
-              onChange={(e) => setPoNumber(e.target.value)}
-              disabled={!entryType}
-            />
-          </div>
-
-          {/* Voucher Number (still placeholder, not implemented in logic) */}
           <div>
             <Label className="mb-1 block">Voucher Number</Label>
-            <Input placeholder="Auto-generated or enter manually" />
+            <Input placeholder="Enter Voucher No." value={voucherNo} onChange={e => setVoucherNo(e.target.value)} />
           </div>
-
-          {/* Issued Date (still placeholder, not implemented in logic) */}
           <div>
             <Label className="mb-1 block">Issued Date</Label>
-            <Input type="date" />
+            <Input type="date" value={dateOut} onChange={e => setDateOut(e.target.value)} />
           </div>
-
-          {/* Vendor Name (read-only as it comes from PO) */}
           <div>
             <Label className="mb-1 block">Vendor Name</Label>
-            <Input 
-              placeholder="Will auto-populate from PO" 
+            <Input
+              placeholder="Auto-populates from PO"
               value={vendorName}
               readOnly
+              className="bg-gray-100"
             />
           </div>
-
-          {/* FPO Number */}
           <div>
             <Label className="mb-1 block">FPO Number</Label>
-            <Input placeholder="Enter FPO Number" onChange={(e) => setFpoNum(e.target.value)} />
+            <Input placeholder="Enter FPO Number" value={fpoNumber} onChange={(e) => setFpoNumber(e.target.value)} />
           </div>
         </div>
       </div>
 
-      {/* Products Table */}
       {entryType && (
         <div className="mt-8 overflow-x-auto rounded-md border">
           <table className="w-full table-auto border-collapse">
             <thead className="bg-[#2C3E50] text-white text-sm">
               <tr>
                 <th className="py-2 px-4 text-center">Product Name</th>
-                <th className="py-2 px-4 text-center">Unit</th>
-                {/* Max Qty header for both Knitting and Dyeing */}
-                <th className="py-2 px-4 text-center">Max Qty</th>
-                
-                {/* Lot No and Shade are always displayed as they can be present in PO data */}
                 <th className="py-2 px-4 text-center">Lot No.</th>
                 <th className="py-2 px-4 text-center">Shade</th>
-
-                <th className="py-2 px-4 text-center">Remaining Qty</th>
+                <th className="py-2 px-4 text-center">Available Qty</th>
+                <th className="py-2 px-4 text-center">Max Qty</th>
+                <th className="py-2 px-4 text-center">Unit</th>
                 <th className="py-2 px-4 text-center">Issued Qty</th>
-                <th className="py-2 px-4 text-center">Process</th>
-                {entryType === 'Knitting' && (
-                  <th className="py-2 px-4 text-center">Delivery Status</th>
-                )}
-                <th className="py-2 px-4 text-center">Remove</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr>
-                  <td colSpan={getColSpan()} className="text-center py-4">
-                    Loading...
-                  </td>
-                </tr>
-              ) : products.length > 0 ? (
-                products.map((p, i) => (
-                  <tr
-                    key={p.product_id || i}
-                    className={i % 2 === 0 ? 'bg-white' : 'bg-[#f8f8f8]'}
-                  >
-                    <td className="py-2 px-4 text-center text-sm">{p.product_name || '-'}</td>
-                    <td className="py-2 px-4 text-center text-sm">{p.unit || '-'}</td>
-                    <td className="py-2 px-4 text-center text-sm">{p.max_qty ?? '-'}</td> {/* Display Max Qty */}
-                    
-                    <td className="py-2 px-4 text-center text-sm">{p.lot_no || '-'}</td>
-                    <td className="py-2 px-4 text-center text-sm">{p.shade || '-'}</td>
-                    
-                    <td className="py-2 px-4 text-center text-sm">{p.remaining_qty ?? '-'}</td>
+                <tr><td colSpan="7" className="text-center py-4">Loading...</td></tr>
+              ) : filteredProducts.length > 0 ? (
+                filteredProducts.map((p, i) => (
+                  <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-[#f8f8f8]'}>
+                    <td className="py-2 px-4 text-center text-sm">{p.product_name}</td>
+                    <td className="py-2 px-4 text-center text-sm">{p.lot_no}</td>
+                    <td className="py-2 px-4 text-center text-sm">{p.shade}</td>
+                    <td className="py-2 px-4 text-center text-sm">{p.quantity}</td>
+                    <td className="py-2 px-4 text-center text-sm">{p.max_qty}</td>
+                    <td className="py-2 px-4 text-center text-sm">{p.unit}</td>
                     <td className="py-2 px-4 text-center">
                       <Input
                         type="number"
-                        value={issuedQuantities[p.product_id] || ''}
-                        onChange={(e) =>
-                          handleQtyChange(p.product_id, e.target.value, p.remaining_qty)
-                        }
+                        value={issuedQuantities[i] || ''}
+                        onChange={(e) => handleQtyChange(i, e.target.value, p.quantity)}
                         className="w-24 mx-auto"
+                        max={p.quantity}
+                        min="0"
                       />
-                    </td>
-                    <td className="py-2 px-4 text-center text-sm">{entryType}</td>
-                    {entryType === 'Knitting' && (
-                      <td className="py-2 px-4 text-center text-sm">{p.delivery_status || '-'}</td>
-                    )}
-                    <td className="py-2 px-4 text-center">
-                      <button
-                        onClick={() =>
-                          setProducts(prev => prev.filter(prod => prod.product_id !== p.product_id))
-                        }
-                        className="text-red-600 hover:underline"
-                      >
-                        Remove
-                      </button>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td
-                    colSpan={getColSpan()}
-                    className="text-center py-4 text-muted-foreground"
-                  >
-                    {poNumber ? 'No products available for this PO number' : 'Enter a PO number to see products'}
+                  <td colSpan="7" className="text-center py-4 text-muted-foreground">
+                    {poNumber ? `No products available for '${entryType}'` : 'Select an Entry Type'}
                   </td>
                 </tr>
               )}
@@ -428,14 +284,13 @@ const CreateOutEntry = () => {
         </div>
       )}
 
-      {/* Save Button */}
       <div className="mt-8 text-center">
         <Button
           className="bg-green-600 hover:bg-green-700 text-white px-8 py-2 text-md rounded"
           onClick={handleSave}
-          disabled={isLoading}
+          disabled={isLoading || filteredProducts.length === 0}
         >
-          {isLoading ? 'Saving...' : 'Save'}
+          {isLoading ? 'Saving...' : 'Save Out Entry'}
         </Button>
       </div>
     </div>
