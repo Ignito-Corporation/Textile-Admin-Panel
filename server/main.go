@@ -82,6 +82,13 @@ func main() {
 	finalStock := r.Group("/api/finalstock")
 	{
 		finalStock.POST("/", routes.CreateFinalStockEntry)
+		finalStock.GET("/", routes.GetAllFinalStockProducts)
+	}
+
+	outProducts := r.Group("/api/outproducts")
+	{
+		outProducts.POST("/", routes.CreateOutProduct)
+		outProducts.GET("/", routes.GetAllOutProducts)
 	}
 
 	log.Println("Server running at http://localhost:8080")
