@@ -40,12 +40,131 @@ type OutEntry struct {
 	DateIn     string             `bson:"date_in" json:"date_in"`
 	DateOut    string             `bson:"date_out" json:"date_out"`
 	FPONumber  string             `bson:"fpo_number" json:"fpo_number"`
-	VendorName string             `bson:"vendor_name" json:"vendor_name"`
+	VendorName string             `bson:"vendorname" json:"vendorname"`
 	Products   []OutEntryProduct  `bson:"products" json:"products"`
 	CreatedAt  time.Time          `bson:"created_at" json:"created_at"`
 }
 
-// CreateOutEntry handles the creation of a new out entry
+// ReceivedProduct represents the payload for a received product
+type ReceivedProduct struct {
+	OutEntryID  string  `json:"out_entry_id"`
+	ProductID   string  `json:"product_id"`
+	ProductName string  `json:"product_name"`
+	Unit        string  `json:"unit"`
+	Shade       string  `json:"shade"`
+	LotNo       string  `json:"lot_no"`
+	Process     string  `json:"process"`
+	PONumber    string  `json:"po_number"`
+	ReceivedQty float64 `json:"received_qty"`
+}
+
+// GetOutEntriesByPO fetches all out_entries for a given PO number.
+func GetOutEntriesByPO(c *gin.Context) {
+	poNumber := c.Param("poNumber")
+	collection := db.Database.Collection("out_entries")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cursor, err := collection.Find(ctx, bson.M{"po_number": poNumber})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch out entries"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var entries []OutEntry
+	if err = cursor.All(ctx, &entries); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode out entries"})
+		return
+	}
+
+	if len(entries) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"message": "No out entries found for this PO number"})
+		return
+	}
+
+	c.JSON(http.StatusOK, entries)
+}
+
+// MarkAsReceived handles the logic for receiving a product.
+func MarkAsReceived(c *gin.Context) {
+	var receivedProduct ReceivedProduct
+	if err := c.ShouldBindJSON(&receivedProduct); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input", "details": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if receivedProduct.Process == "Knitting" {
+		// Add as a new product to the original purchase_bill with knitting=true
+		purchaseBillsCollection := db.Database.Collection("purchase_bills")
+		filter := bson.M{"vendor.ponumber": receivedProduct.PONumber}
+		update := bson.M{
+			"$push": bson.M{
+				"products": bson.M{
+					"product_id":   primitive.NewObjectID().Hex(), // Or use original if needed
+					"product_name": receivedProduct.ProductName,
+					"unit":         receivedProduct.Unit,
+					"shade":        receivedProduct.Shade,
+					"lot_no":       receivedProduct.LotNo,
+					"quantity":     receivedProduct.ReceivedQty,
+					"max_qty":      receivedProduct.ReceivedQty,
+					"knitting":     true, // Mark as ready for Dyeing
+					// Add other fields like rate, gst etc. if necessary
+				},
+			},
+		}
+
+		_, err := purchaseBillsCollection.UpdateOne(ctx, filter, update)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update purchase bill for Knitting", "details": err.Error()})
+			return
+		}
+
+	} else if receivedProduct.Process == "Dyeing" {
+		// Add to the final_stocks collection
+		finalStocksCollection := db.Database.Collection("final_stocks")
+		finalStockEntry := FinalStock{
+			PONumber:    receivedProduct.PONumber,
+			ProductID:   receivedProduct.ProductID,
+			ProductName: receivedProduct.ProductName,
+			Unit:        receivedProduct.Unit,
+			Shade:       receivedProduct.Shade,
+			LotNo:       receivedProduct.LotNo,
+			Quantity:    receivedProduct.ReceivedQty,
+			ReceivedAt:  time.Now(),
+		}
+		_, err := finalStocksCollection.InsertOne(ctx, finalStockEntry)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create final stock entry for Dyeing", "details": err.Error()})
+			return
+		}
+	}
+
+	// Optional: You might want to update the original out_entry to mark the product as received.
+	// This would prevent receiving it again. For example, decrementing the issued_qty.
+	outEntriesCollection := db.Database.Collection("out_entries")
+	outEntryID, _ := primitive.ObjectIDFromHex(receivedProduct.OutEntryID)
+	filter := bson.M{
+		"_id":             outEntryID,
+		"products.lot_no": receivedProduct.LotNo,
+	}
+	update := bson.M{
+		"$inc": bson.M{
+			"products.$.issued_qty": -receivedProduct.ReceivedQty,
+		},
+	}
+	_, err := outEntriesCollection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		log.Printf("Warning: could not decrement received quantity from out_entry: %v", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Product marked as received successfully"})
+}
+
+// CreateOutEntry (existing function - no changes needed here)
 func CreateOutEntry(c *gin.Context) {
 	var outEntry OutEntry
 	if err := c.ShouldBindJSON(&outEntry); err != nil {
@@ -82,7 +201,6 @@ func CreateOutEntry(c *gin.Context) {
 
 			filter := bson.M{
 				"vendor.ponumber": outEntry.PONumber,
-				"products.lot_no": product.LotNo,
 			}
 
 			update := bson.M{

@@ -21,39 +21,39 @@ type PurchaseBillProduct struct {
 	Shade       string  `bson:"shade" json:"shade"`
 	LotNo       string  `bson:"lot_no" json:"lot_no"`
 	MillName    string  `bson:"mill_name" json:"mill_name"`
-	Quantity    float64 `bson:"quantity" json:"quantity"` // Corresponds to 'quantity' from frontend
-	MaxQty      float64 `bson:"max_qty" json:"max_qty"`   // This field will store the initial quantity
+	Quantity    float64 `bson:"quantity" json:"quantity"`
+	MaxQty      float64 `bson:"max_qty" json:"max_qty"`
 	Rate        float64 `bson:"rate" json:"rate"`
 	GSTPercent  float64 `bson:"gst_percent" json:"gst_percent"`
 	Amount      float64 `bson:"amount" json:"amount"`
 	Knitting    bool    `bson:"knitting" json:"knitting"`
-	GSTAmount   float64 `bson:"gst_amount" json:"gst_amount"` // Corresponds to 'gst_amount' from frontend
+	GSTAmount   float64 `bson:"gst_amount" json:"gst_amount"`
 }
 
 // VendorInfo represents vendor details in the purchase bill
 type VendorInfo struct {
-	VendorID   string `json:"vendor_id"`
-	VendorName string `json:"vendor_name"`
-	PONumber   string `json:"po_number"`
-	GRNNumber  string `json:"grn_number"`
-	BillType   string `json:"bill_type"`
-	Address    string `json:"address"`
-	State      string `json:"state"`
-	Phone      string `json:"phone"`
+	VendorID   string `bson:"vendorid" json:"vendorid"`
+	VendorName string `bson:"vendorname" json:"vendorname"`
+	PONumber   string `bson:"ponumber" json:"ponumber"`
+	GRNNumber  string `bson:"grnnumber" json:"grnnumber"`
+	BillType   string `bson:"billtype" json:"billtype"`
+	Address    string `bson:"address" json:"address"`
+	State      string `bson:"state" json:"state"`
+	Phone      string `bson:"phone" json:"phone"`
 }
 
 // PurchaseBill represents the purchase bill document structure
 type PurchaseBill struct {
 	ID           primitive.ObjectID    `bson:"_id,omitempty" json:"id,omitempty"`
-	PartyName    string                `json:"party_name"`
-	BillNumber   string                `json:"bill_number"`
-	BillDate     string                `json:"bill_date"`
-	ReceivedDate string                `json:"received_date"`
-	CRLNumber    string                `json:"crl_number"`
-	Mode         string                `json:"mode"`
-	Vendor       VendorInfo            `json:"vendor"`
-	Products     []PurchaseBillProduct `json:"products"`
-	CreatedAt    time.Time             `json:"created_at"`
+	PartyName    string                `bson:"partyname" json:"partyname"`
+	BillNumber   string                `bson:"billnumber" json:"billnumber"`
+	BillDate     string                `bson:"billdate" json:"billdate"`
+	ReceivedDate string                `bson:"receiveddate" json:"receiveddate"`
+	CRLNumber    string                `bson:"crlnumber" json:"crlnumber"`
+	Mode         string                `bson:"mode" json:"mode"`
+	Vendor       VendorInfo            `bson:"vendor" json:"vendor"`
+	Products     []PurchaseBillProduct `bson:"products" json:"products"`
+	CreatedAt    time.Time             `bson:"createdat" json:"created_at"`
 }
 
 // BillSummary provides a summary of bill entries
@@ -62,6 +62,37 @@ type BillSummary struct {
 	TotalValue     float64 `json:"total_value"`
 	ThisMonth      int64   `json:"this_month"`
 }
+
+// AddProductToBill adds a new product to an existing purchase bill.
+func AddProductToBill(c *gin.Context) {
+	poNumber := c.Param("poNumber")
+	var product PurchaseBillProduct
+	if err := c.ShouldBindJSON(&product); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid product data", "details": err.Error()})
+		return
+	}
+
+	collection := db.Database.Collection("purchase_bills")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	filter := bson.M{"vendor.ponumber": poNumber}
+	update := bson.M{"$push": bson.M{"products": product}}
+
+	result, err := collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add product to bill", "details": err.Error()})
+		return
+	}
+	if result.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No purchase bill found for the given PO Number"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Product added to bill successfully"})
+}
+
+// --- Other existing bill functions (CreateBillEntry, GetAllBills, etc.) remain the same ---
 
 func CreateBillEntry(c *gin.Context) {
 	var bill PurchaseBill

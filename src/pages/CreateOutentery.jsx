@@ -49,7 +49,7 @@ const CreateOutEntry = () => {
         const data = await response.json();
         console.log("Fetched Bill Data:", data);
         
-        setVendorName(data?.vendor?.vendor_name || '');
+        setVendorName(data?.vendor?.vendorname || '');
         setAllProducts(data.products || []);
 
       } catch (err) {
@@ -145,7 +145,7 @@ const CreateOutEntry = () => {
         body: JSON.stringify({
           po_number: poNumber,
           process: entryType,
-          vendor_name: vendorName,
+          vendorname: vendorName,
           products: productsToSave,
           fpo_number: fpoNumber,
           voucher_no: voucherNo,
