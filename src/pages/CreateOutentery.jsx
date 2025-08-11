@@ -16,72 +16,93 @@ import { CirclePlus } from 'lucide-react';
 const CreateOutEntry = () => {
   const [entryType, setEntryType] = useState('');
   const [vendor, setVendor] = useState('');
-  const [vendors, setVendors] = useState([]);
+  const [vendorName, setVendorName] = useState('');
   const [products, setProducts] = useState([]);
   const [issuedQuantities, setIssuedQuantities] = useState({});
   const [poNumber, setPoNumber] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [FpoNum, setFpoNum] = useState('');
+  const [parentJobWorkId, setParentJobWorkId] = useState('');
 
-  // Fetch vendors
+  // Fetch vendor and products when PO number changes and entry type is set
   useEffect(() => {
-    fetch('http://localhost:8080/api/master/vendors')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          const mapped = data
-            .filter(v => v?.id)
-            .map(v => ({
-              id: String(v.id),
-              name: v.name || 'Unnamed Vendor',
-            }));
-          setVendors(mapped);
-        } else {
-          console.warn('Vendors API did not return an array:', data);
-          setVendors([]);
-        }
-      })
-      .catch(err => {
-        console.error('Error fetching vendors:', err);
-        setVendors([]);
-      });
-  }, []);
-
-  // Fetch products whenever entry type or vendor changes
-  useEffect(() => {
-    if (!entryType) {
+    if (!entryType || !poNumber) {
       setProducts([]);
+      setVendor('');
+      setVendorName('');
       return;
     }
 
-    let url = '';
-
-    if (entryType === 'Knitting') {
-      if (vendor) {
-        const vendorName = encodeURIComponent(
-          vendors.find(v => v.id === vendor)?.name || ''
-        );
-        url = `http://localhost:8080/api/jobwork/available-knitting?vendor_name=${vendorName}`;
-      } else {
-        url = 'http://localhost:8080/api/jobwork/available-knitting';
-      }
-    } else {
-      url = 'http://localhost:8080/api/jobwork/available-dying';
-    }
-
-    fetch(url)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setProducts(data);
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        let url = '';
+        if (entryType === 'Knitting') {
+          url = `http://localhost:8080/api/jobwork/available-knitting/${poNumber}`;
         } else {
-          console.warn(`Unexpected ${entryType} products response:`, data);
-          setProducts([]);
+          url = `http://localhost:8080/api/jobwork/available-dying/${poNumber}`;
         }
-      })
-      .catch(err => {
-        console.error(`Error fetching ${entryType} products:`, err);
+
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+
+        if (entryType === 'Dyeing') {
+          // Handle dying response format
+          if (data) {
+            setParentJobWorkId(data.parent_jobwork_id || '');
+            setVendor(data.vendor_id || '');
+            setVendorName(data.vendor_name || '');
+            
+            const transformedProducts = data.products?.map(product => ({
+              product_id: product.product_id,
+              product_name: product.product_name,
+              unit: product.unit,
+              shade: product.shade,
+              lot_no: product.lot_no,
+              remaining_qty: product.available_qty,
+              max_qty: product.max_qty
+            })) || [];
+            
+            setProducts(transformedProducts);
+          }
+        } else {
+          // Original knitting handling (unchanged)
+          if (data) {
+            setVendor(data.vendor_id || '');
+            setVendorName(data.vendor_name || '');
+            
+            const transformedProducts = data.products?.map(product => ({
+              product_id: product.productid || product.product_id,
+              product_name: product.productname || product.product_name,
+              unit: product.unit,
+              shade: product.shade,
+              lot_no: product.lotno || product.lot_no,
+              remaining_qty: product.productqty || product.remaining_qty,
+            })) || [];
+            
+            setProducts(transformedProducts);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching data:', err);
         setProducts([]);
-      });
-  }, [entryType, vendor, vendors]);
+        setVendor('');
+        setVendorName('');
+        alert(`Error: ${err.message}`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(() => {
+      fetchData();
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+  }, [entryType, poNumber]);
 
   const handleQtyChange = (productId, value, remaining) => {
     let val = parseFloat(value) || 0;
@@ -93,113 +114,118 @@ const CreateOutEntry = () => {
     }));
   };
 
-const handleSave = async () => {
-  const selectedProducts = products
-    .filter(p => issuedQuantities[p.product_id] > 0)
-    .map(p => ({
-      product_id: p.product_id,
-      product_name: p.product_name,
-      unit: p.unit,
-      lot_no: p.lot_no || '',
-      shade: p.shade || '',
-      quantity: issuedQuantities[p.product_id],
-      remaining_qty: p.remaining_qty // Include remaining quantity in the payload
-    }));
+  const handleSave = async () => {
+    const selectedProducts = products
+      .filter(p => issuedQuantities[p.product_id] > 0)
+      .map(p => ({
+        product_id: p.product_id,
+        product_name: p.product_name,
+        unit: p.unit,
+        lot_no: p.lot_no || '',
+        shade: p.shade || '',
+        quantity: issuedQuantities[p.product_id],
+        remaining_qty: p.remaining_qty
+      }));
 
-  if (!vendor) {
-    alert('Please select a vendor');
-    return;
-  }
-
-  if (selectedProducts.length === 0) {
-    alert('Please enter at least one issued quantity');
-    return;
-  }
-
-  // Validate quantities don't exceed remaining
-  for (const product of selectedProducts) {
-    if (product.quantity > product.remaining_qty) {
-      alert(`Cannot issue more than remaining quantity for ${product.product_name}`);
+    if (!vendorName) {
+      alert('Please select a vendor (should be auto-filled with PO number)');
       return;
     }
-  }
 
-  try {
-    let parentOrderId;
-    
-    // If PO number is provided, try to find existing parent order
-    if (poNumber) {
-      try {
-        const response = await fetch(`http://localhost:8080/api/jobwork/order/${poNumber}`);
-        if (response.ok) {
-          const existingOrder = await response.json();
-          parentOrderId = existingOrder._id || existingOrder.id;
-          console.log('Found existing parent order:', parentOrderId);
-        } else if (response.status === 404) {
-          console.log('No existing order found for PO:', poNumber);
-          // Proceed to create new order
-        } else {
-          throw new Error(`Failed to check for existing order: ${response.statusText}`);
-        }
-      } catch (err) {
-        console.error('Error checking for existing order:', err);
-        // Continue with creating new order even if check fails
+    if (selectedProducts.length === 0) {
+      alert('Please enter at least one issued quantity');
+      return;
+    }
+
+    // Validate quantities don't exceed remaining
+    for (const product of selectedProducts) {
+      if (product.quantity > product.remaining_qty) {
+        alert(`Cannot issue more than remaining quantity for ${product.product_name}`);
+        return;
       }
     }
 
-    // If no existing parent order found, create a new one
-    if (!parentOrderId) {
-      const parentOrderResponse = await fetch('http://localhost:8080/api/jobwork/order', {
+    try {
+      let parentOrderId = parentJobWorkId;
+      
+      // For dying, we should already have the parentJobWorkId from the API
+      if (entryType === 'Dyeing' && !parentOrderId) {
+        alert('Missing parent job work ID for dyeing process');
+        return;
+      }
+
+      // For knitting, keep the existing logic to find/create parent order
+      if (entryType === 'Knitting') {
+        if (poNumber) {
+          try {
+            const response = await fetch(`http://localhost:8080/api/jobwork/order/${poNumber}`);
+            if (response.ok) {
+              const existingOrder = await response.json();
+              parentOrderId = existingOrder._id || existingOrder.id;
+            } else if (response.status === 404) {
+              console.log('No existing order found for PO:', poNumber);
+            }
+          } catch (err) {
+            console.error('Error checking for existing order:', err);
+          }
+        }
+
+        if (!parentOrderId) {
+          const parentOrderResponse = await fetch('http://localhost:8080/api/jobwork/order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              po_number: poNumber || undefined,
+              purchase_bill_id: null,
+              products: selectedProducts.map(p => ({
+                product_id: p.product_id,
+                product_name: p.product_name,
+                unit: p.unit,
+                expected_qty: p.remaining_qty
+              }))
+            }),
+          });
+
+          const parentOrderData = await parentOrderResponse.json();
+          if (!parentOrderResponse.ok) {
+            throw new Error(parentOrderData.error || 'Failed to create parent order');
+          }
+
+          parentOrderId = parentOrderData.order_id;
+        }
+      }
+
+      // Create the suborder
+      const subOrderResponse = await fetch('http://localhost:8080/api/jobwork/suborder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          po_number: poNumber || undefined,
-          purchase_bill_id: null,
-          products: selectedProducts.map(p => ({
-            product_id: p.product_id,
-            product_name: p.product_name,
-            unit: p.unit,
-            expected_qty: p.remaining_qty // Use remaining_qty as expected_qty for new orders
-          }))
+          parent_jobwork_id: parentOrderId,
+          entry_type: 'OUT',
+          process: entryType,
+          vendor_id: vendor || null,
+          vendor_name: vendorName || null,
+          products: selectedProducts || null,
+          fpo_number: FpoNum,
+          remarks: null,
+          created_by: "Vendor",
         }),
       });
 
-      const parentOrderData = await parentOrderResponse.json();
-      if (!parentOrderResponse.ok) {
-        throw new Error(parentOrderData.error || 'Failed to create parent order');
+      const subOrderData = await subOrderResponse.json();
+      if (!subOrderResponse.ok) {
+        throw new Error(subOrderData.error || 'Failed to create suborder');
       }
 
-      parentOrderId = parentOrderData.order_id;
-      console.log('Created new parent order:', parentOrderId);
+      console.log('Saved:', subOrderData);
+      alert('Out Entry created successfully!');
+      setIssuedQuantities({});
+    } catch (err) {
+      console.error('Error saving:', err);
+      alert(`Error: ${err.message}`);
     }
+  };
 
-    // Create the suborder
-    const subOrderResponse = await fetch('http://localhost:8080/api/jobwork/suborder', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        parent_jobwork_id: parentOrderId,
-        entry_type: 'OUT',
-        process: entryType,
-        vendor_id: vendor,
-        vendor_name: vendors.find(v => v.id === vendor)?.name || '',
-        products: selectedProducts,
-      }),
-    });
-
-    const subOrderData = await subOrderResponse.json();
-    if (!subOrderResponse.ok) {
-      throw new Error(subOrderData.error || 'Failed to create suborder');
-    }
-
-    console.log('Saved:', subOrderData);
-    alert('Out Entry created successfully!');
-    setIssuedQuantities({});
-  } catch (err) {
-    console.error('Error saving:', err);
-    alert(`Error: ${err.message}`);
-  }
-};
   return (
     <div className="p-6 bg-white min-h-screen">
       {/* Top Bar */}
@@ -218,13 +244,13 @@ const handleSave = async () => {
           {/* Entry Type */}
           <div>
             <Label className="mb-1 block">Entry Type</Label>
-            <Select onValueChange={setEntryType}>
+            <Select onValueChange={setEntryType} value={entryType}>
               <SelectTrigger>
                 <SelectValue placeholder="Select Entry Type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Knitting">Knitting</SelectItem>
-                <SelectItem value="Dying">Dying</SelectItem>
+                <SelectItem value="Dyeing">Dyeing</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -236,6 +262,7 @@ const handleSave = async () => {
               placeholder="Enter PO Number" 
               value={poNumber}
               onChange={(e) => setPoNumber(e.target.value)}
+              disabled={!entryType}
             />
           </div>
 
@@ -251,27 +278,20 @@ const handleSave = async () => {
             <Input type="date" />
           </div>
 
-          {/* Vendor Name */}
+          {/* Vendor Name (read-only as it comes from PO) */}
           <div>
             <Label className="mb-1 block">Vendor Name</Label>
-            <Select onValueChange={setVendor}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select Vendor" />
-              </SelectTrigger>
-              <SelectContent>
-                {vendors.map(v => (
-                  <SelectItem key={v.id} value={v.id}>
-                    {v.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Input 
+              placeholder="Will auto-populate from PO" 
+              value={vendorName}
+              readOnly
+            />
           </div>
 
           {/* FPO Number */}
           <div>
             <Label className="mb-1 block">FPO Number</Label>
-            <Input placeholder="Enter FPO Number" />
+            <Input placeholder="Enter FPO Number" onChange={(e) => setFpoNum(e.target.value)} />
           </div>
         </div>
       </div>
@@ -281,27 +301,33 @@ const handleSave = async () => {
         <div className="mt-8 overflow-x-auto rounded-md border">
           <table className="w-full table-auto border-collapse">
             <thead className="bg-[#2C3E50] text-white text-sm">
-  <tr>
-    <th className="py-2 px-4 text-center">Product Name</th>
-    <th className="py-2 px-4 text-center">Unit</th>
-    {entryType === 'Dying' && (
-      <>
-        <th className="py-2 px-4 text-center">Lot No.</th>
-        <th className="py-2 px-4 text-center">Shade</th>
-      </>
-    )}
-    <th className="py-2 px-4 text-center">Total Qty</th>
-    <th className="py-2 px-4 text-center">Remaining Qty</th>
-    <th className="py-2 px-4 text-center">Issued Qty</th>
-    <th className="py-2 px-4 text-center">Process</th>
-    {entryType === 'Knitting' && (
-      <th className="py-2 px-4 text-center">Delivery Status</th>
-    )}
-    <th className="py-2 px-4 text-center">Remove</th>
-  </tr>
-</thead>
+              <tr>
+                <th className="py-2 px-4 text-center">Product Name</th>
+                <th className="py-2 px-4 text-center">Unit</th>
+                {entryType === 'Dyeing' && (
+                  <>
+                    <th className="py-2 px-4 text-center">Lot No.</th>
+                    <th className="py-2 px-4 text-center">Shade</th>
+                    <th className="py-2 px-4 text-center">Max Qty</th>
+                  </>
+                )}
+                <th className="py-2 px-4 text-center">Remaining Qty</th>
+                <th className="py-2 px-4 text-center">Issued Qty</th>
+                <th className="py-2 px-4 text-center">Process</th>
+                {entryType === 'Knitting' && (
+                  <th className="py-2 px-4 text-center">Delivery Status</th>
+                )}
+                <th className="py-2 px-4 text-center">Remove</th>
+              </tr>
+            </thead>
             <tbody>
-              {products.length > 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={entryType === 'Knitting' ? 8 : entryType === 'Dyeing' ? 8 : 7} className="text-center py-4">
+                    Loading...
+                  </td>
+                </tr>
+              ) : products.length > 0 ? (
                 products.map((p, i) => (
                   <tr
                     key={p.product_id || i}
@@ -309,14 +335,14 @@ const handleSave = async () => {
                   >
                     <td className="py-2 px-4 text-center text-sm">{p.product_name || '-'}</td>
                     <td className="py-2 px-4 text-center text-sm">{p.unit || '-'}</td>
-                    {entryType === 'Dying' && (
+                    {entryType === 'Dyeing' && (
                       <>
                         <td className="py-2 px-4 text-center text-sm">{p.lot_no || '-'}</td>
                         <td className="py-2 px-4 text-center text-sm">{p.shade || '-'}</td>
+                        <td className="py-2 px-4 text-center text-sm">{p.max_qty ?? '-'}</td>
                       </>
                     )}
                     <td className="py-2 px-4 text-center text-sm">{p.remaining_qty ?? '-'}</td>
-                    <td className="py-2 px-4 text-center text-sm">{p.remaining_qty ?? p.expected_qty}</td>
                     <td className="py-2 px-4 text-center">
                       <Input
                         type="number"
@@ -346,10 +372,10 @@ const handleSave = async () => {
               ) : (
                 <tr>
                   <td
-                    colSpan={entryType === 'Knitting' ? 8 : 7}
+                    colSpan={entryType === 'Knitting' ? 8 : entryType === 'Dyeing' ? 8 : 7}
                     className="text-center py-4 text-muted-foreground"
                   >
-                    No products available
+                    {poNumber ? 'No products available for this PO number' : 'Enter a PO number to see products'}
                   </td>
                 </tr>
               )}
@@ -363,8 +389,9 @@ const handleSave = async () => {
         <Button
           className="bg-green-600 hover:bg-green-700 text-white px-8 py-2 text-md rounded"
           onClick={handleSave}
+          disabled={isLoading}
         >
-          Save
+          {isLoading ? 'Saving...' : 'Save'}
         </Button>
       </div>
     </div>
