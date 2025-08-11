@@ -13,20 +13,24 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type ProductItem struct {
-	ProductID   string  `json:"product_id"`
-	ProductName string  `json:"product_name"`
-	Unit        string  `json:"unit"`
-	Shade       string  `json:"shade"`
-	LotNo       string  `json:"lot_no"`
-	MillName    string  `json:"mill_name"`
-	ProductQty  float64 `json:"quantity"`      // 🔁 Match 'quantity' from frontend
-	Rate        float64 `json:"rate"`
-	GSTPercent  float64 `json:"gst_percent"`
-	Amount      float64 `json:"amount"`
-	GRate       float64 `json:"gst_amount"`    // 🔁 Match 'gst_amount' from frontend
+// PurchaseBillProduct represents a product in the purchase bill
+type PurchaseBillProduct struct {
+	ProductID   string  `bson:"product_id" json:"product_id"`
+	ProductName string  `bson:"product_name" json:"product_name"`
+	Unit        string  `bson:"unit" json:"unit"`
+	Shade       string  `bson:"shade" json:"shade"`
+	LotNo       string  `bson:"lot_no" json:"lot_no"`
+	MillName    string  `bson:"mill_name" json:"mill_name"`
+	Quantity    float64 `bson:"quantity" json:"quantity"` // Corresponds to 'quantity' from frontend
+	MaxQty      float64 `bson:"max_qty" json:"max_qty"`   // This field will store the initial quantity
+	Rate        float64 `bson:"rate" json:"rate"`
+	GSTPercent  float64 `bson:"gst_percent" json:"gst_percent"`
+	Amount      float64 `bson:"amount" json:"amount"`
+	Knitting    bool    `bson:"knitting" json:"knitting"`
+	GSTAmount   float64 `bson:"gst_amount" json:"gst_amount"` // Corresponds to 'gst_amount' from frontend
 }
 
+// VendorInfo represents vendor details in the purchase bill
 type VendorInfo struct {
 	VendorID   string `json:"vendor_id"`
 	VendorName string `json:"vendor_name"`
@@ -38,19 +42,21 @@ type VendorInfo struct {
 	Phone      string `json:"phone"`
 }
 
+// PurchaseBill represents the purchase bill document structure
 type PurchaseBill struct {
-	ID           primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	PartyName    string             `json:"party_name"`
-	BillNumber   string             `json:"bill_number"`
-	BillDate     string             `json:"bill_date"`
-	ReceivedDate string             `json:"received_date"`
-	CRLNumber    string             `json:"crl_number"`
-	Mode         string             `json:"mode"`
-	Vendor       VendorInfo         `json:"vendor"`
-	Products     []ProductItem      `json:"products"`
-	CreatedAt    time.Time          `json:"created_at"`
+	ID           primitive.ObjectID    `bson:"_id,omitempty" json:"id,omitempty"`
+	PartyName    string                `json:"party_name"`
+	BillNumber   string                `json:"bill_number"`
+	BillDate     string                `json:"bill_date"`
+	ReceivedDate string                `json:"received_date"`
+	CRLNumber    string                `json:"crl_number"`
+	Mode         string                `json:"mode"`
+	Vendor       VendorInfo            `json:"vendor"`
+	Products     []PurchaseBillProduct `json:"products"`
+	CreatedAt    time.Time             `json:"created_at"`
 }
 
+// BillSummary provides a summary of bill entries
 type BillSummary struct {
 	TotalBillEntry int64   `json:"total_bill_entry"`
 	TotalValue     float64 `json:"total_value"`
@@ -64,7 +70,12 @@ func CreateBillEntry(c *gin.Context) {
 		return
 	}
 
-	bill.CreatedAt = time.Now()
+	for i := range bill.Products {
+		bill.Products[i].MaxQty = bill.Products[i].Quantity
+		bill.Products[i].Knitting = false
+	}
+
+	bill.CreatedAt = time.Now() // Set creation timestamp
 	collection := db.Database.Collection("purchase_bills")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
