@@ -22,82 +22,127 @@ const CreateOutEntry = () => {
   const [poNumber, setPoNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [FpoNum, setFpoNum] = useState('');
-  const [parentJobWorkId, setParentJobWorkId] = useState('');
+  const [parentJobWorkId, setParentJobWorkId] = useState(''); // State to hold parent JobWorkOrder ID
 
   // Fetch vendor and products when PO number changes and entry type is set
   useEffect(() => {
-    if (!entryType || !poNumber) {
-      setProducts([]);
-      setVendor('');
-      setVendorName('');
-      return;
-    }
-
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        let url = '';
-        if (entryType === 'Knitting') {
-          url = `http://localhost:8080/api/jobwork/available-knitting/${poNumber}`;
-        } else {
-          url = `http://localhost:8080/api/jobwork/available-dying/${poNumber}`;
-        }
-
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-
-        if (entryType === 'Dyeing') {
-          // Handle dying response format
-          if (data) {
-            setParentJobWorkId(data.parent_jobwork_id || '');
-            setVendor(data.vendor_id || '');
-            setVendorName(data.vendor_name || '');
-            
-            const transformedProducts = data.products?.map(product => ({
-              product_id: product.product_id,
-              product_name: product.product_name,
-              unit: product.unit,
-              shade: product.shade,
-              lot_no: product.lot_no,
-              remaining_qty: product.available_qty,
-              max_qty: product.max_qty
-            })) || [];
-            
-            setProducts(transformedProducts);
-          }
-        } else {
-          // Original knitting handling (unchanged)
-          if (data) {
-            setVendor(data.vendor_id || '');
-            setVendorName(data.vendor_name || '');
-            
-            const transformedProducts = data.products?.map(product => ({
-              product_id: product.productid || product.product_id,
-              product_name: product.productname || product.product_name,
-              unit: product.unit,
-              shade: product.shade,
-              lot_no: product.lotno || product.lot_no,
-              remaining_qty: product.productqty || product.remaining_qty,
-            })) || [];
-            
-            setProducts(transformedProducts);
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching data:', err);
+    const debounceTimer = setTimeout(() => {
+      if (!entryType || !poNumber) {
         setProducts([]);
+        setIssuedQuantities({}); // Clear issued quantities
         setVendor('');
         setVendorName('');
-        alert(`Error: ${err.message}`);
-      } finally {
-        setIsLoading(false);
+        setParentJobWorkId(''); 
+        return;
       }
-    };
 
-    const debounceTimer = setTimeout(() => {
+      const fetchData = async () => {
+        setIsLoading(true);
+        try {
+          let url = '';
+          if (entryType === 'Knitting') {
+            url = `http://localhost:8080/api/jobwork/available-knitting/${poNumber}`;
+          } else {
+            url = `http://localhost:8080/api/jobwork/available-dying/${poNumber}`;
+          }
+
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const data = await response.json();
+          console.log("Fetched data:", data);
+
+          if (entryType === 'Dyeing') {
+            if (data) {
+              setParentJobWorkId(data.parent_jobwork_id || '');
+              setVendor(data.vendor_id || '');
+              setVendorName(data.vendor_name || '');
+              
+              const transformedProducts = data.products?.map(product => ({
+                product_id: product.product_id,
+                product_name: product.product_name,
+                unit: product.unit,
+                shade: product.shade,
+                lot_no: product.lot_no,
+                // ⭐ FIX for Dyeing: Use available_qty for remaining and max_qty directly
+                remaining_qty: product.available_qty, 
+                max_qty: product.max_qty 
+              })) || [];
+              
+              setProducts(transformedProducts);
+            }
+          } else { // entryType === 'Knitting'
+            if (data && data.bill && data.bill.length > 0) { // Check for the new 'bill' structure
+              const billData = data.bill[0]; // Assuming only one bill per PO for simplicity
+              
+              // Set vendor details from the bill
+              setVendor(billData.vendor.vendor_id || '');
+              setVendorName(billData.vendor.vendor_name || '');
+              
+              const totalRemainingFromBackend = data.remaining_qty; // This is the aggregated remaining_qty
+              
+              const transformedProducts = billData.products?.map(product => {
+                let displayedRemainingQty = product.quantity; // Default to PurchaseBill quantity
+                let displayedMaxQty = product.quantity;      // Default to PurchaseBill quantity
+
+                // ⭐ FIX for Knitting: Use aggregated remaining_qty if it's less than product.quantity
+                // This heuristic works best for single-product bills where `data.remaining_qty` applies to that one product.
+                if (totalRemainingFromBackend !== undefined && 
+                    totalRemainingFromBackend < product.quantity &&
+                    billData.products.length === 1 
+                ) {
+                    displayedRemainingQty = totalRemainingFromBackend;
+                    // MaxQty should still reflect the original total from Purchase Bill as ExpectedQty
+                    // in this scenario, as the JWO 'ExpectedQty' is derived from it.
+                    displayedMaxQty = product.quantity; 
+                } else if (billData.products.length > 1 && totalRemainingFromBackend !== undefined) {
+                    // If multiple products, and totalRemainingFromBackend is less than *total* purchase quantity,
+                    // a more complex distribution logic might be needed here if per-product remaining is critical.
+                    // For now, if multiple products, we default to showing individual purchase quantities.
+                    // Or, if there is a way to get JWO per-product remaining, it should be done in backend API.
+                    // For this fix, stick to purchase bill quantity if complex JWO merging isn't provided.
+                }
+
+                return {
+                  product_id: product.product_id, 
+                  product_name: product.product_name,
+                  unit: product.unit,
+                  shade: product.shade || '-', 
+                  lot_no: product.lot_no || '-', 
+                  max_qty: displayedMaxQty,       // Dynamically set based on logic
+                  remaining_qty: displayedRemainingQty, // Dynamically set based on logic
+                  mill_name: product.mill_name || '-',
+                  rate: product.rate || 0,
+                  gst_percent: product.gst_percent || 0,
+                  amount: product.amount || 0,
+                  gst_amount: product.gst_amount || 0, 
+                  delivery_status: '-', 
+                };
+              }) || [];
+              
+              setProducts(transformedProducts);
+
+            } else {
+              setProducts([]);
+              setVendor('');
+              setVendorName('');
+              setParentJobWorkId('');
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching data:', err);
+          setProducts([]);
+          setIssuedQuantities({}); 
+          setVendor('');
+          setVendorName('');
+          setParentJobWorkId('');
+          alert(`Error: ${err.message}`);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
       fetchData();
     }, 500);
 
@@ -107,7 +152,7 @@ const CreateOutEntry = () => {
   const handleQtyChange = (productId, value, remaining) => {
     let val = parseFloat(value) || 0;
     if (val < 0) val = 0;
-    if (val > remaining) val = remaining;
+    if (val > remaining) val = remaining; 
     setIssuedQuantities(prev => ({
       ...prev,
       [productId]: val,
@@ -123,8 +168,9 @@ const CreateOutEntry = () => {
         unit: p.unit,
         lot_no: p.lot_no || '',
         shade: p.shade || '',
-        quantity: issuedQuantities[p.product_id],
-        remaining_qty: p.remaining_qty
+        quantity: issuedQuantities[p.product_id], // This is the 'issued' quantity
+        remaining_qty: p.remaining_qty, // Pass the original remaining_qty for backend validation
+        max_qty: p.max_qty // Ensure max_qty is carried into the selectedProducts array
       }));
 
     if (!vendorName) {
@@ -146,42 +192,21 @@ const CreateOutEntry = () => {
     }
 
     try {
-      let parentOrderId = parentJobWorkId;
-      
-      // For dying, we should already have the parentJobWorkId from the API
-      if (entryType === 'Dyeing' && !parentOrderId) {
-        alert('Missing parent job work ID for dyeing process');
-        return;
-      }
+      let currentParentJobWorkId = parentJobWorkId;
 
-      // For knitting, keep the existing logic to find/create parent order
       if (entryType === 'Knitting') {
-        if (poNumber) {
-          try {
-            const response = await fetch(`http://localhost:8080/api/jobwork/order/${poNumber}`);
-            if (response.ok) {
-              const existingOrder = await response.json();
-              parentOrderId = existingOrder._id || existingOrder.id;
-            } else if (response.status === 404) {
-              console.log('No existing order found for PO:', poNumber);
-            }
-          } catch (err) {
-            console.error('Error checking for existing order:', err);
-          }
-        }
-
-        if (!parentOrderId) {
+        if (!currentParentJobWorkId) { 
           const parentOrderResponse = await fetch('http://localhost:8080/api/jobwork/order', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              po_number: poNumber || undefined,
-              purchase_bill_id: null,
+              po_number: poNumber || "", 
+              purchase_bill_id: null, 
               products: selectedProducts.map(p => ({
                 product_id: p.product_id,
                 product_name: p.product_name,
                 unit: p.unit,
-                expected_qty: p.remaining_qty
+                expected_qty: p.max_qty 
               }))
             }),
           });
@@ -190,22 +215,26 @@ const CreateOutEntry = () => {
           if (!parentOrderResponse.ok) {
             throw new Error(parentOrderData.error || 'Failed to create parent order');
           }
-
-          parentOrderId = parentOrderData.order_id;
+          currentParentJobWorkId = parentOrderData.order_id;
+          console.log('Created new parent order:', currentParentJobWorkId);
         }
       }
 
-      // Create the suborder
+      if (entryType === 'Dyeing' && !currentParentJobWorkId) {
+        alert('Missing parent job work ID for dyeing process. Please ensure the PO number is correct.');
+        return;
+      }
+
       const subOrderResponse = await fetch('http://localhost:8080/api/jobwork/suborder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          parent_jobwork_id: parentOrderId,
+          parent_jobwork_id: currentParentJobWorkId,
           entry_type: 'OUT',
           process: entryType,
-          vendor_id: vendor || null,
-          vendor_name: vendorName || null,
-          products: selectedProducts || null,
+          vendor_id: vendor,
+          vendor_name: vendorName,
+          products: selectedProducts,
           fpo_number: FpoNum,
           remarks: null,
           created_by: "Vendor",
@@ -219,11 +248,28 @@ const CreateOutEntry = () => {
 
       console.log('Saved:', subOrderData);
       alert('Out Entry created successfully!');
+      // Reset form fields after successful save
       setIssuedQuantities({});
+      setProducts([]);
+      setPoNumber('');
+      setVendor('');
+      setVendorName('');
+      setFpoNum('');
+      setParentJobWorkId('');
+      setEntryType('');
     } catch (err) {
       console.error('Error saving:', err);
       alert(`Error: ${err.message}`);
     }
+  };
+
+  const getColSpan = () => {
+    if (entryType === 'Knitting') {
+      return 9; 
+    } else if (entryType === 'Dyeing') {
+      return 9; 
+    }
+    return 7; 
   };
 
   return (
@@ -266,13 +312,13 @@ const CreateOutEntry = () => {
             />
           </div>
 
-          {/* Voucher Number */}
+          {/* Voucher Number (still placeholder, not implemented in logic) */}
           <div>
             <Label className="mb-1 block">Voucher Number</Label>
             <Input placeholder="Auto-generated or enter manually" />
           </div>
 
-          {/* Issued Date */}
+          {/* Issued Date (still placeholder, not implemented in logic) */}
           <div>
             <Label className="mb-1 block">Issued Date</Label>
             <Input type="date" />
@@ -304,13 +350,13 @@ const CreateOutEntry = () => {
               <tr>
                 <th className="py-2 px-4 text-center">Product Name</th>
                 <th className="py-2 px-4 text-center">Unit</th>
-                {entryType === 'Dyeing' && (
-                  <>
-                    <th className="py-2 px-4 text-center">Lot No.</th>
-                    <th className="py-2 px-4 text-center">Shade</th>
-                    <th className="py-2 px-4 text-center">Max Qty</th>
-                  </>
-                )}
+                {/* Max Qty header for both Knitting and Dyeing */}
+                <th className="py-2 px-4 text-center">Max Qty</th>
+                
+                {/* Lot No and Shade are always displayed as they can be present in PO data */}
+                <th className="py-2 px-4 text-center">Lot No.</th>
+                <th className="py-2 px-4 text-center">Shade</th>
+
                 <th className="py-2 px-4 text-center">Remaining Qty</th>
                 <th className="py-2 px-4 text-center">Issued Qty</th>
                 <th className="py-2 px-4 text-center">Process</th>
@@ -323,7 +369,7 @@ const CreateOutEntry = () => {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={entryType === 'Knitting' ? 8 : entryType === 'Dyeing' ? 8 : 7} className="text-center py-4">
+                  <td colSpan={getColSpan()} className="text-center py-4">
                     Loading...
                   </td>
                 </tr>
@@ -335,13 +381,11 @@ const CreateOutEntry = () => {
                   >
                     <td className="py-2 px-4 text-center text-sm">{p.product_name || '-'}</td>
                     <td className="py-2 px-4 text-center text-sm">{p.unit || '-'}</td>
-                    {entryType === 'Dyeing' && (
-                      <>
-                        <td className="py-2 px-4 text-center text-sm">{p.lot_no || '-'}</td>
-                        <td className="py-2 px-4 text-center text-sm">{p.shade || '-'}</td>
-                        <td className="py-2 px-4 text-center text-sm">{p.max_qty ?? '-'}</td>
-                      </>
-                    )}
+                    <td className="py-2 px-4 text-center text-sm">{p.max_qty ?? '-'}</td> {/* Display Max Qty */}
+                    
+                    <td className="py-2 px-4 text-center text-sm">{p.lot_no || '-'}</td>
+                    <td className="py-2 px-4 text-center text-sm">{p.shade || '-'}</td>
+                    
                     <td className="py-2 px-4 text-center text-sm">{p.remaining_qty ?? '-'}</td>
                     <td className="py-2 px-4 text-center">
                       <Input
@@ -372,7 +416,7 @@ const CreateOutEntry = () => {
               ) : (
                 <tr>
                   <td
-                    colSpan={entryType === 'Knitting' ? 8 : entryType === 'Dyeing' ? 8 : 7}
+                    colSpan={getColSpan()}
                     className="text-center py-4 text-muted-foreground"
                   >
                     {poNumber ? 'No products available for this PO number' : 'Enter a PO number to see products'}

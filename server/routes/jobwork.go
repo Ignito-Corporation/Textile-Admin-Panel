@@ -82,12 +82,18 @@ type JobWorkSubOrder struct {
 	Remarks         string              `bson:"remarks,omitempty" json:"remarks,omitempty"`
 }
 
+type MyNewKnittingResponse struct {
+	Bill         []PurchaseBill `json:"bill"`
+	RemainingQty float64        `json:"remaining_qty"` // Total remaining quantity
+}
+
 // ---------- Helpers & Constants ----------
 
 var (
 	jobWorkOrdersColl    = func() *mongo.Collection { return db.Database.Collection("job_work_orders") }
 	jobWorkSubordersColl = func() *mongo.Collection { return db.Database.Collection("job_work_suborders") }
 	stocksColl           = func() *mongo.Collection { return db.Database.Collection("stocks") }
+	purchaseBillColl     = func() *mongo.Collection { return db.Database.Collection("purchase_bills") }
 )
 
 func nowUTC() time.Time { return time.Now().UTC() }
@@ -535,25 +541,23 @@ func GetAvailableKnitting(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	purchaseBillColl := db.Database.Collection("purchase_bills")
-
-	// Get PO number from path parameter
 	poNumber := c.Param("po_number")
 	if poNumber == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "PO number is required"})
 		return
 	}
 
-	// Exact match (case insensitive) for PO number
-	filter := bson.M{
+	var response MyNewKnittingResponse // Use the new response struct
+
+	// --- Step 1: Fetch PurchaseBill details ---
+	purchaseBillFilter := bson.M{
 		"vendor.ponumber": bson.M{
 			"$regex": primitive.Regex{Pattern: "^" + regexp.QuoteMeta(poNumber) + "$", Options: "i"},
 		},
 	}
 
-	// Find matching purchase bills
 	var bills []PurchaseBill
-	cursor, err := purchaseBillColl.Find(ctx, filter)
+	cursor, err := purchaseBillColl().Find(ctx, purchaseBillFilter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch purchase bills", "details": err.Error()})
 		return
@@ -566,19 +570,41 @@ func GetAvailableKnitting(c *gin.Context) {
 	}
 
 	if len(bills) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No bills found with the given PO number"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "No purchase bills found with the given PO number"})
 		return
 	}
 
-	// Prepare response - we'll take the first matching bill (assuming PO numbers are unique)
-	bill := bills[0]
+	// Set the 'bill' field in the response
+	response.Bill = bills
 
-	response := gin.H{
-		"vendor_id":   bill.Vendor.VendorID,
-		"vendor_name": bill.Vendor.VendorName,
-		"po_number":   bill.Vendor.PONumber,
-		"products":    bill.Products,
+	// --- Step 2: Check for an existing JobWorkOrder and calculate total remaining quantity ---
+	var totalRemainingQty float64
+	var existingJobWorkOrder JobWorkOrder
+	err = jobWorkOrdersColl().FindOne(ctx, bson.M{"po_number": poNumber}).Decode(&existingJobWorkOrder)
+
+	if err == nil {
+		// JobWorkOrder found, calculate remaining quantity from JWO products
+		for _, p := range existingJobWorkOrder.Products {
+			remainingForOutKnitting := p.ExpectedQty - p.OutKnittingQty
+			if remainingForOutKnitting > 0 {
+				totalRemainingQty += remainingForOutKnitting
+			}
+		}
+	} else if err == mongo.ErrNoDocuments {
+		// No JobWorkOrder found, calculate remaining quantity from PurchaseBill products
+		for _, bill := range bills { // Iterate through all found bills
+			for _, p := range bill.Products {
+				totalRemainingQty += p.ProductQty // Use ProductQty for remaining if no JWO
+			}
+		}
+	} else {
+		// Handle other potential errors during jobWorkOrder fetch
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch job work order (unexpected DB error)", "details": err.Error()})
+		return
 	}
+
+	// Set the 'remaining_qty' field in the response
+	response.RemainingQty = totalRemainingQty
 
 	c.JSON(http.StatusOK, response)
 }
