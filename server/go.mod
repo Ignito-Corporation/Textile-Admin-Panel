@@ -9,6 +9,8 @@ require (
 	go.mongodb.org/mongo-driver v1.17.4
 )
 
+require github.com/kr/text v0.2.0 // indirect
+
 require (
 	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
@@ -24,7 +26,6 @@ require (
 	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

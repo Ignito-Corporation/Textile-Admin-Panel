@@ -2,49 +2,24 @@ package main
 
 import (
 	"log"
-	"net/http"
 	"textile-admin-panel/db"
 	"textile-admin-panel/routes"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
-func CORSMiddleware() gin.HandlerFunc {
+// Debug middleware to log all requests
+func debugMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		allowedOrigins := []string{
-			"http://localhost:5173", // Local frontend
-			"http://localhost:8080",
-			"https://your-vercel-app.vercel.app", // Prod frontend
-		}
-
-		origin := c.Request.Header.Get("Origin")
-		allowOrigin := ""
-		for _, o := range allowedOrigins {
-			if o == origin {
-				allowOrigin = o
-				break
-			}
-		}
-
-		// If no match, you can comment this to block unknown origins
-		if allowOrigin == "" {
-			allowOrigin = "*" // for open access, but remove if you want strict security
-		}
-
-		c.Writer.Header().Set("Access-Control-Allow-Origin", allowOrigin)
-		c.Writer.Header().Set("Vary", "Origin")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, Accept, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Expose-Headers", "*")
-
-		// Handle preflight OPTIONS
-		if c.Request.Method == http.MethodOptions {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
+		log.Printf("🔥 Request: %s %s from Origin: %s", c.Request.Method, c.Request.URL.Path, c.Request.Header.Get("Origin"))
+		log.Printf("🔥 Headers: %v", c.Request.Header)
 
 		c.Next()
+
+		log.Printf("🔥 Response Status: %d", c.Writer.Status())
+		log.Printf("🔥 Response Headers: %v", c.Writer.Header())
 	}
 }
 
@@ -57,10 +32,34 @@ func main() {
 
 	r := gin.Default()
 
-	r.Use(CORSMiddleware())
+	// Add debug middleware first
+	r.Use(debugMiddleware())
+
+	// Use only the Gin CORS middleware for development
+	r.Use(cors.New(cors.Config{
+		AllowAllOrigins:  true,
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Requested-With"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: false,
+		MaxAge:           12 * time.Hour,
+	}))
+
+	// Test endpoints
+	r.GET("/test-cors", func(c *gin.Context) {
+		log.Printf("🧪 Test CORS endpoint called")
+		c.JSON(200, gin.H{"message": "CORS is working!", "origin": c.Request.Header.Get("Origin")})
+	})
 
 	r.GET("/ping", func(c *gin.Context) {
+		log.Printf("🏓 Ping endpoint called")
 		c.JSON(200, gin.H{"message": "Hello World"})
+	})
+
+	// Simple test for finalstock endpoint
+	r.GET("/api/test-finalstock", func(c *gin.Context) {
+		log.Printf("🧪 Test finalstock endpoint called")
+		c.JSON(200, gin.H{"message": "finalstock endpoint is reachable", "data": []interface{}{}})
 	})
 
 	// PO Routes
@@ -94,7 +93,6 @@ func main() {
 		jobwork.GET("/out-entries/po/:poNumber", routes.GetOutEntriesByPO)
 		jobwork.POST("/receive-product", routes.MarkAsReceived)
 		jobwork.GET("/get-items/:process", routes.GetJobworkItemsByProcess)
-
 	}
 
 	// Master Data Routes
@@ -111,19 +109,31 @@ func main() {
 		api.GET("/all", routes.GetAllMasterData)
 	}
 
-	// Final Stock Routes
+	// Final Stock Routes with debug
 	finalStock := r.Group("/api/finalstock")
 	{
-		finalStock.POST("/", routes.CreateFinalStockEntry)
-		finalStock.GET("/", routes.GetAllFinalStockProducts)
+		finalStock.POST("/p", func(c *gin.Context) {
+			log.Println("🎯 POST /api/finalstock called")
+			routes.CreateFinalStockEntry(c)
+		})
+		finalStock.GET("/p", func(c *gin.Context) {
+			log.Println("🎯 GET /api/finalstock called")
+			routes.GetAllFinalStockProducts(c)
+		})
 	}
 
 	outProducts := r.Group("/api/outproducts")
 	{
-		outProducts.POST("/", routes.CreateOutProduct)
-		outProducts.GET("/", routes.GetAllOutProducts)
+		outProducts.POST("/p", func(c *gin.Context) {
+			log.Println("🎯 POST /api/outproducts called")
+			routes.CreateOutProduct(c)
+		})
+		outProducts.GET("/p", func(c *gin.Context) {
+			log.Println("🎯 GET /api/outproducts called")
+			routes.GetAllOutProducts(c)
+		})
 	}
 
-	log.Println("Server running at http://localhost:8080")
+	log.Println("🚀 Server running at http://localhost:8080")
 	r.Run(":8080")
 }
