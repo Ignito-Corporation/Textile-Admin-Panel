@@ -13,7 +13,7 @@ export default function InEntryPage() {
   const fetchItems = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:8080/api/in-quantities/`, {
+      const res = await fetch(`https://textile-admin-panel.onrender.com/api/in-quantities/`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       });

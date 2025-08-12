@@ -197,7 +197,8 @@ export default function Dashboard() {
             fetch('https://textile-admin-panel.onrender.com/api/po/'),
             fetch('https://textile-admin-panel.onrender.com/api/purchase-bill/'),
             fetch('https://textile-admin-panel.onrender.com/api/jobwork/get-items/Knitting'),
-            fetch('https://textile-admin-panel.onrender.com/api/jobwork/get-items/Dyeing')
+            fetch('https://textile-admin-panel.onrender.com/api/jobwork/get-items/Dyeing'),
+            fetch('https://textile-admin-panel.onrender.com/api/jobwork/api/in-quantities/')
           ]);
 
         // Handle responses
