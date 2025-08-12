@@ -64,7 +64,7 @@ export default function AllPOs() {
   useEffect(() => {
     const fetchPOs = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/po/');
+        const response = await fetch('https://textile-admin-panel.onrender.com/api/po/');
         //const response = await fetch('https://textile-admin-panel.onrender.com/api/po/get-po');
         
         if (!response.ok) {
@@ -96,7 +96,7 @@ export default function AllPOs() {
         method: 'DELETE'
       });*/
 
-      const response = await fetch(`http://localhost:8080/api/po/purchase-delete/${poNumber}`, {
+      const response = await fetch(`https://textile-admin-panel.onrender.com/api/po/purchase-delete/${poNumber}`, {
         method: 'DELETE'
       });
 

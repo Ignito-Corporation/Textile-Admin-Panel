@@ -309,7 +309,7 @@
 // //     setPoError("");
 
 // //     try {
-// //       const response = await axios.get(`http://localhost:8080/api/purchase-orders/${poId}`);
+// //       const response = await axios.get(`https://textile-admin-panel.onrender.com/api/purchase-orders/${poId}`);
 // //       const poData = response.data;
 
 // //       // Update form fields with PO data
@@ -430,7 +430,7 @@
 // //       };
 
 // //       // Send to backend
-// //       const response = await axios.post("http://localhost:8080/api/purchase-bill/", billData);
+// //       const response = await axios.post("https://textile-admin-panel.onrender.com/api/purchase-bill/", billData);
 
 // //       alert(`Bill created successfully! ID: ${response.data.bill_id}`);
 
@@ -626,7 +626,7 @@
 //   useEffect(() => {
 //     const fetchVendors = async () => {
 //       try {
-//         const response = await axios.get('http://localhost:8080/api/master/vendors');
+//         const response = await axios.get('https://textile-admin-panel.onrender.com/api/master/vendors');
 //         const supplierVendors = response.data.filter(
 //           vendor => vendor.category === "Supplier"
 //         );
@@ -667,7 +667,7 @@
 //     setPoError("");
 
 //     try {
-//       const response = await axios.get(`http://localhost:8080/api/po/${poId}`);
+//       const response = await axios.get(`https://textile-admin-panel.onrender.com/api/po/${poId}`);
 //       const poData = response.data;
 
 //       // Update vendor details and form fields
@@ -827,7 +827,7 @@
 //       console.log(productsData)
 
 //       // Submit to backend
-//       const response = await axios.post("http://localhost:8080/api/purchase-bill/", billData);
+//       const response = await axios.post("https://textile-admin-panel.onrender.com/api/purchase-bill/", billData);
 //       alert(`Bill created successfully! ID: ${response.data.bill_id}`);
 
 //       // Reset form
@@ -1059,7 +1059,7 @@ export default function CreateBillEntry() {
   useEffect(() => {
     const fetchVendors = async () => {
       try {
-        const response = await axios.get('http://localhost:8080/api/master/vendors');
+        const response = await axios.get('https://textile-admin-panel.onrender.com/api/master/vendors');
         const supplierVendors = response.data.filter(
           vendor => vendor.category === "Supplier"
         );
@@ -1100,7 +1100,7 @@ export default function CreateBillEntry() {
     setPoError("");
 
     try {
-      const response = await axios.get(`http://localhost:8080/api/po/${poId}`);
+      const response = await axios.get(`https://textile-admin-panel.onrender.com/api/po/${poId}`);
       const poData = response.data;
 
       // Update vendor details and form fields
@@ -1256,7 +1256,7 @@ export default function CreateBillEntry() {
       };
 
       // Submit to backend
-      const response = await axios.post("http://localhost:8080/api/purchase-bill/", billData);
+      const response = await axios.post("https://textile-admin-panel.onrender.com/api/purchase-bill/", billData);
       console.warn(billData)
       alert(`Bill created successfully! ID: ${response.data.bill_id}`);
 

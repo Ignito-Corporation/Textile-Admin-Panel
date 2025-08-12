@@ -31,7 +31,7 @@ const CreateOutEntry = () => {
   useEffect(() => {
     const fetchVendors = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/master/vendors');
+        const response = await fetch('https://textile-admin-panel.onrender.com/api/master/vendors');
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -55,7 +55,7 @@ const CreateOutEntry = () => {
       }
       setIsLoading(true);
       try {
-        const response = await fetch(`http://localhost:8080/api/purchase-bill/po/${poNumber}`);
+        const response = await fetch(`https://textile-admin-panel.onrender.com/api/purchase-bill/po/${poNumber}`);
         if (!response.ok) {
           if (response.status === 404) {
              alert('No bill found for this PO Number.');
@@ -163,7 +163,7 @@ const CreateOutEntry = () => {
 
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8080/api/jobwork/out-entry', {
+      const response = await fetch('https://textile-admin-panel.onrender.com/api/jobwork/out-entry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

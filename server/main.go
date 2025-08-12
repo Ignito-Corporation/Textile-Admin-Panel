@@ -140,6 +140,6 @@ func main() {
 		inQuantities.GET("/", routes.GetAllInQuantities)
 	}
 
-	log.Println("🚀 Server running at http://localhost:8080")
+	log.Println("🚀 Server running at https://textile-admin-panel.onrender.com")
 	r.Run(":8080")
 }

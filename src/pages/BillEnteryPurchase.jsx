@@ -119,7 +119,7 @@ export default function BillEntryPurchase() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch("http://localhost:8080/api/purchase-bill/");
+        const response = await fetch("https://textile-admin-panel.onrender.com/api/purchase-bill/");
         
         if (!response.ok) {
           throw new Error(`Failed to fetch data: ${response.status}`);

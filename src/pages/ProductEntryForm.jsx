@@ -206,7 +206,7 @@
 //             };
 
 //             // Make API calls
-//             const baseUrl = "http://localhost:8080";
+//             const baseUrl = "https://textile-admin-panel.onrender.com";
 
 //             // First test the connection
 //             // try {
@@ -474,7 +474,7 @@ const ProductEntryForm = () => {
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
-    const baseUrl = "http://localhost:8080";
+    const baseUrl = "https://textile-admin-panel.onrender.com";
 
     // ===== Product Details Save =====
     const saveProductDetails = async () => {
