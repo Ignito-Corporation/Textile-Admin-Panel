@@ -792,10 +792,10 @@
 //         // Calculate amounts if not already calculated
 //         const quantity = parseFloat(p.qty) || 0;
 //         const rate = parseFloat(p.rate) || 0;
-      
+
 //         const amount = quantity * rate;
 //         const gRate = (amount * gstPercent) / 100;
-        
+
 
 //         return {
 //           product_id: p.poProduct?.product_id || "",
@@ -1054,6 +1054,7 @@ export default function CreateBillEntry() {
   const [poError, setPoError] = useState("");
   const [vendorOptions, setVendorOptions] = useState([]);
   const [vendorDetails, setVendorDetails] = useState(null);
+  const [shadeOptions, setShadeOptions] = useState([]);
 
   // Fetch vendors on component mount
   useEffect(() => {
@@ -1069,7 +1070,23 @@ export default function CreateBillEntry() {
       }
     };
 
+    const fetchShades = async () => {
+      try {
+        const response = await axios.get('https://textile-admin-panel.onrender.com/api/master/shades');
+        console.log("Shades API response:", response.data);
+
+        // Extract the actual shade data from the response
+        // Assuming the response has a "data" property containing the array of shades
+        const shades = response.data.data || response.data;
+        setShadeOptions(shades);
+      } catch (error) {
+        console.error("Failed to fetch shades:", error);
+      }
+    };
+
     fetchVendors();
+    fetchShades();
+
     setForm(f => ({ ...f, crlNumber: crlCounter }));
   }, [crlCounter]);
 
@@ -1218,15 +1235,15 @@ export default function CreateBillEntry() {
       const productsData = products.map(p => {
         // Extract GST percentage (remove % sign if present)
         const gstPercent = parseFloat(p.gst.replace(/%/g, '')) || 0;
-        
+
         // Parse quantities and rates
         const quantity = parseFloat(p.qty) || 0;
         const rate = parseFloat(p.rate) || 0;
-        
+
         // Calculate amounts
         const amount = quantity * rate;
         const gstAmount = (amount * gstPercent) / 100;
-        
+
         return {
           product_id: p.poProduct?.product_id || "",
           product_name: p.productName,
@@ -1420,22 +1437,117 @@ export default function CreateBillEntry() {
                 <tbody>
                   {products.map(row => (
                     <tr key={row.id} className="even:bg-gray-50">
-                      {["productName", "unit", "shade", "lot", "mill", "qty", "rate", "gst", "amount", "gRate"].map(field => (
-                        <td key={field} className="px-3 py-2">
-                          <input
-                            type={["qty", "rate"].includes(field) ? "number" : "text"}
-                            value={row[field]}
-                            readOnly={field === "amount" || field === "gRate"}
-                            onChange={e => updateProduct(row.id, field, e.target.value)}
-                            className={`w-full border border-gray-300 rounded px-2 py-1 text-sm ${
-                              field === "amount" || field === "gRate" ? "bg-gray-100" : ""
-                            }`}
-                          />
-                        </td>
-                      ))}
+                      {/* Product Name */}
                       <td className="px-3 py-2">
-                        <button 
-                          onClick={() => removeRow(row.id)} 
+                        <input
+                          type="text"
+                          value={row.productName}
+                          onChange={e => updateProduct(row.id, 'productName', e.target.value)}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                        />
+                      </td>
+
+                      {/* Unit */}
+                      <td className="px-3 py-2">
+                        <input
+                          type="text"
+                          value={row.unit}
+                          onChange={e => updateProduct(row.id, 'unit', e.target.value)}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                        />
+                      </td>
+
+                      {/* Shade - Modified to dropdown */}
+                      <td className="px-3 py-2">
+                        <select
+                          value={row.shade}
+                          onChange={e => updateProduct(row.id, 'shade', e.target.value)}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                        >
+                          <option value="">Select Shade</option>
+                          {shadeOptions.map(shade => (
+                            // MODIFIED: Use proper properties from the shade object
+                            <option key={shade._id} value={shade.shade_name}>
+                              {shade.shade_code} - {shade.shade_name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
+                      {/* Lot */}
+                      <td className="px-3 py-2">
+                        <input
+                          type="text"
+                          value={row.lot}
+                          onChange={e => updateProduct(row.id, 'lot', e.target.value)}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                        />
+                      </td>
+
+                      {/* Mill */}
+                      <td className="px-3 py-2">
+                        <input
+                          type="text"
+                          value={row.mill}
+                          onChange={e => updateProduct(row.id, 'mill', e.target.value)}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                        />
+                      </td>
+
+                      {/* Quantity */}
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          value={row.qty}
+                          onChange={e => updateProduct(row.id, 'qty', e.target.value)}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                        />
+                      </td>
+
+                      {/* Rate */}
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          value={row.rate}
+                          onChange={e => updateProduct(row.id, 'rate', e.target.value)}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                        />
+                      </td>
+
+                      {/* GST */}
+                      <td className="px-3 py-2">
+                        <input
+                          type="text"
+                          value={row.gst}
+                          onChange={e => updateProduct(row.id, 'gst', e.target.value)}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                        />
+                      </td>
+
+                      {/* Amount (read-only) */}
+                      <td className="px-3 py-2">
+                        <input
+                          type="text"
+                          value={row.amount}
+                          readOnly
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm bg-gray-100"
+                        />
+                      </td>
+
+                      {/* GRate (read-only) */}
+                      <td className="px-3 py-2">
+                        <input
+                          type="text"
+                          value={row.gRate}
+                          readOnly
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm bg-gray-100"
+                        />
+                      </td>
+
+                      {/* Action */}
+                      <td className="px-3 py-2">
+                        <button
+                          onClick={() => removeRow(row.id)}
                           className="text-red-500 hover:underline"
                         >
                           Remove

@@ -1433,9 +1433,8 @@ const CreatePO = () => {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 <option value="">Select Terms</option>
-                                <option value="Net 30">Net 30</option>
-                                <option value="Net 60">Net 60</option>
-                                <option value="Due on Receipt">Due on Receipt</option>
+                                <option value="Net 30">Cash</option>
+                                <option value="Due on Receipt">Credit</option>
                             </select>
                         </div>
                     </div>
