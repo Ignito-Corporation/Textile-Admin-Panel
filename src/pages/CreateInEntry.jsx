@@ -20,7 +20,7 @@ const CreateInEntry = () => {
       }
       setIsLoading(true);
       try {
-        const response = await fetch(`http://localhost:8080/api/jobwork/out-entries/po/${poNumber}`);
+        const response = await fetch(`https://textile-admin-panel.onrender.com/api/jobwork/out-entries/po/${poNumber}`);
         if (!response.ok) {
           if (response.status === 404) {
             alert('No out entries found for this PO Number.');
@@ -85,7 +85,7 @@ const CreateInEntry = () => {
         received_qty: receivedQty,
       };
 
-      const response = await fetch('http://localhost:8080/api/jobwork/receive-product', {
+      const response = await fetch('https://textile-admin-panel.onrender.com/api/jobwork/receive-product', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

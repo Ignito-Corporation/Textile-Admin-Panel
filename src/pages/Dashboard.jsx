@@ -194,11 +194,10 @@ export default function Dashboard() {
         // Fetch all data in parallel
         const [poResponse, billResponse, knittingResponse, dyeingResponse, inEntryResponse] = 
           await Promise.all([
-            fetch('http://localhost:8080/api/po/'),
-            fetch('http://localhost:8080/api/purchase-bill/'),
-            fetch('http://localhost:8080/api/jobwork/get-items/Knitting'),
-            fetch('http://localhost:8080/api/jobwork/get-items/Dyeing'),
-            fetch('http://localhost:8080/api/in-quantities/')
+            fetch('https://textile-admin-panel.onrender.com/api/po/'),
+            fetch('https://textile-admin-panel.onrender.com/api/purchase-bill/'),
+            fetch('https://textile-admin-panel.onrender.com/api/jobwork/get-items/Knitting'),
+            fetch('https://textile-admin-panel.onrender.com/api/jobwork/get-items/Dyeing')
           ]);
 
         // Handle responses

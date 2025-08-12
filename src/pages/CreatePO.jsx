@@ -524,17 +524,17 @@
 //                 setIsLoading(true);
 
 //                 // Fetch PO number
-//                 const poNumberResponse = await fetch('http://localhost:8080/api/po/generate-number');
+//                 const poNumberResponse = await fetch('https://textile-admin-panel.onrender.com/api/po/generate-number');
 //                 const poNumberData = await poNumberResponse.json();
 //                 setFormData(prev => ({ ...prev, poNumber: poNumberData.po_number }));
 
 //                 // Fetch vendors
-//                 const vendorsResponse = await fetch('http://localhost:8080/api/master/vendors');
+//                 const vendorsResponse = await fetch('https://textile-admin-panel.onrender.com/api/master/vendors');
 //                 const vendorsData = await vendorsResponse.json();
 //                 setVendorOptions(vendorsData);
 
 //                 // Fetch products
-//                 const productsResponse = await fetch('http://localhost:8080/api/master/products');
+//                 const productsResponse = await fetch('https://textile-admin-panel.onrender.com/api/master/products');
 //                 const productsData = await productsResponse.json();
 //                 setProductOptions(productsData);
 
@@ -670,7 +670,7 @@
 //         };
 
 //         try {
-//             const response = await fetch('http://localhost:8080/api/po/', {
+//             const response = await fetch('https://textile-admin-panel.onrender.com/api/po/', {
 //                 method: 'POST',
 //                 headers: {
 //                     'Content-Type': 'application/json'
@@ -1150,12 +1150,12 @@ const CreatePO = () => {
                 setIsLoading(true);
 
                 // Fetch PO number
-                const poNumberResponse = await fetch('http://localhost:8080/api/po/generate-number');
+                const poNumberResponse = await fetch('https://textile-admin-panel.onrender.com/api/po/generate-number');
                 const poNumberData = await poNumberResponse.json();
                 setFormData(prev => ({ ...prev, poNumber: poNumberData.po_number }));
 
                 // Fetch vendors - filter by "Supplier" category and handle null values
-                const vendorsResponse = await fetch('http://localhost:8080/api/master/vendors');
+                const vendorsResponse = await fetch('https://textile-admin-panel.onrender.com/api/master/vendors');
                 const vendorsData = await vendorsResponse.json();
                 const supplierVendors = vendorsData.filter(vendor =>
                     vendor.category === "Supplier"
@@ -1163,7 +1163,7 @@ const CreatePO = () => {
                 setVendorOptions(supplierVendors);
 
                 // Fetch products
-                const productsResponse = await fetch('http://localhost:8080/api/master/products');
+                const productsResponse = await fetch('https://textile-admin-panel.onrender.com/api/master/products');
                 const productsData = await productsResponse.json();
                 setProductOptions(productsData);
 
@@ -1315,7 +1315,7 @@ const CreatePO = () => {
         };
 
         try {
-            const response = await fetch('http://localhost:8080/api/po/', {
+            const response = await fetch('https://textile-admin-panel.onrender.com/api/po/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

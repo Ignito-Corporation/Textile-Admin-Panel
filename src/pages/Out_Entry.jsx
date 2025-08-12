@@ -13,7 +13,7 @@
 // //   const fetchItems = async (process) => {
 // //     try {
 // //       setLoading(true);
-// //       const res = await fetch(`http://localhost:8080/api/jobwork/get-items/${process}`, {
+// //       const res = await fetch(`https://textile-admin-panel.onrender.com/api/jobwork/get-items/${process}`, {
 // //         method: "GET",
 // //         headers: {
 // //           "Content-Type": "application/json",
@@ -137,7 +137,7 @@
 //   const fetchItems = async (process) => {
 //     try {
 //       setLoading(true);
-//       const res = await fetch(`http://localhost:8080/api/jobwork/get-items/${process}`, {
+//       const res = await fetch(`https://textile-admin-panel.onrender.com/api/jobwork/get-items/${process}`, {
 //         method: "GET",
 //         headers: { "Content-Type": "application/json" },
 //       });
@@ -257,7 +257,7 @@ export default function StockConversionPage() {
   const fetchItems = async (process) => {
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:8080/api/jobwork/get-items/${process}`, {
+      const res = await fetch(`https://textile-admin-panel.onrender.com/api/jobwork/get-items/${process}`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       });
@@ -287,7 +287,7 @@ export default function StockConversionPage() {
     try {
       setDownloading(true);
 
-      const res = await fetch("http://localhost:8080/api/convert/json-to-pdf", {
+      const res = await fetch("https://textile-admin-panel.onrender.com/api/convert/json-to-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(items),
