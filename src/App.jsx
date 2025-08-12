@@ -20,6 +20,7 @@ import CreateOutEntry from "./pages/CreateOutentery";
 import ProductEntryForm from "./pages/ProductEntryForm";
 import FinalStock from "./pages/FinalStock";
 import Setting from "./pages/Settings"; 
+import In_Entry from './pages/In_Entry';
 
 const AppWrapper = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -49,6 +50,7 @@ const AppWrapper = () => {
         <Route path="all-pos" element={<AllPOs />} />
         <Route path="bill-entry" element={<BillEntry />} />
         <Route path='out-entry' element={<Out_Entry />} />
+        <Route path='in-entry' element={<In_Entry />} />
       </Route>
 
       <Route
