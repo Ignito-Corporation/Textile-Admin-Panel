@@ -135,6 +135,11 @@ func main() {
 		})
 	}
 
+	inQuantities := r.Group("/api/in-quantities")
+	{
+		inQuantities.GET("/", routes.GetAllInQuantities)
+	}
+
 	log.Println("🚀 Server running at http://localhost:8080")
 	r.Run(":8080")
 }
