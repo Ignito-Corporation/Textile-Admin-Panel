@@ -312,4 +312,5 @@ export default function FinalStock() {
             </table>
         </div>
     );
+    
 }

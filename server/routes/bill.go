@@ -2,6 +2,7 @@ package routes
 
 import (
 	"context"
+	"log" // Import the log package
 	"net/http"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 type PurchaseBillProduct struct {
 	ProductID   string  `bson:"product_id" json:"product_id"`
 	ProductName string  `bson:"product_name" json:"product_name"`
+	HSNCode     string  `bson:"hsn_code" json:"hsn_code"` // Added HSNCode field
 	Unit        string  `bson:"unit" json:"unit"`
 	Shade       string  `bson:"shade" json:"shade"`
 	LotNo       string  `bson:"lot_no" json:"lot_no"`
@@ -32,11 +34,11 @@ type PurchaseBillProduct struct {
 
 // VendorInfo represents vendor details in the purchase bill
 type VendorInfo struct {
-	VendorID   string `bson:"vendorid" json:"vendorid"`
-	VendorName string `bson:"vendorname" json:"vendorname"`
-	PONumber   string `bson:"ponumber" json:"ponumber"`
-	GRNNumber  string `bson:"grnnumber" json:"grnnumber"`
-	BillType   string `bson:"billtype" json:"billtype"`
+	VendorID   string `bson:"vendorid" json:"vendor_id"` // Corrected JSON tag for vendor_id
+	VendorName string `bson:"vendorname" json:"vendor_name"`
+	PONumber   string `bson:"ponumber" json:"po_number"`
+	GRNNumber  string `bson:"grnnumber" json:"grn_number"`
+	BillType   string `bson:"billtype" json:"bill_type"`
 	Address    string `bson:"address" json:"address"`
 	State      string `bson:"state" json:"state"`
 	Phone      string `bson:"phone" json:"phone"`
@@ -45,11 +47,11 @@ type VendorInfo struct {
 // PurchaseBill represents the purchase bill document structure
 type PurchaseBill struct {
 	ID           primitive.ObjectID    `bson:"_id,omitempty" json:"id,omitempty"`
-	PartyName    string                `bson:"partyname" json:"partyname"`
-	BillNumber   string                `bson:"billnumber" json:"billnumber"`
-	BillDate     string                `bson:"billdate" json:"billdate"`
-	ReceivedDate string                `bson:"receiveddate" json:"receiveddate"`
-	CRLNumber    string                `bson:"crlnumber" json:"crlnumber"`
+	PartyName    string                `bson:"partyname" json:"party_name"`
+	BillNumber   string                `bson:"billnumber" json:"bill_number"`
+	BillDate     string                `bson:"billdate" json:"bill_date"`
+	ReceivedDate string                `bson:"receiveddate" json:"received_date"`
+	CRLNumber    string                `bson:"crlnumber" json:"crl_number"`
 	Mode         string                `bson:"mode" json:"mode"`
 	Vendor       VendorInfo            `bson:"vendor" json:"vendor"`
 	Products     []PurchaseBillProduct `bson:"products" json:"products"`
@@ -63,11 +65,12 @@ type BillSummary struct {
 	ThisMonth      int64   `json:"this_month"`
 }
 
-// AddProductToBill adds a new product to an existing purchase bill.
+// AddProductToBill handles adding a new product to an existing purchase bill.
 func AddProductToBill(c *gin.Context) {
 	poNumber := c.Param("poNumber")
 	var product PurchaseBillProduct
 	if err := c.ShouldBindJSON(&product); err != nil {
+		log.Printf("Error binding JSON for AddProductToBill: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid product data", "details": err.Error()})
 		return
 	}
@@ -81,6 +84,7 @@ func AddProductToBill(c *gin.Context) {
 
 	result, err := collection.UpdateOne(ctx, filter, update)
 	if err != nil {
+		log.Printf("Error adding product to bill: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add product to bill", "details": err.Error()})
 		return
 	}
@@ -92,35 +96,44 @@ func AddProductToBill(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Product added to bill successfully"})
 }
 
-// --- Other existing bill functions (CreateBillEntry, GetAllBills, etc.) remain the same ---
-
+// CreateBillEntry handles adding a new purchase bill entry.
 func CreateBillEntry(c *gin.Context) {
 	var bill PurchaseBill
+	// Attempt to bind the incoming JSON to the PurchaseBill struct
 	if err := c.ShouldBindJSON(&bill); err != nil {
+		log.Printf("Error binding JSON for PurchaseBill: %v", err) // Log the binding error
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input", "details": err.Error()})
 		return
 	}
 
+	// Iterate through products to set MaxQty (as per your original logic)
+	// and ensure default values or any other transformations.
 	for i := range bill.Products {
 		bill.Products[i].MaxQty = bill.Products[i].Quantity
-		// The `knitting` field should be sent from the frontend.
-		// If not provided, it defaults to false (for Knitting process).
+		// The `knitting` field is now explicitly included from the frontend,
+		// and will be handled correctly by Go's JSON unmarshaling (defaults to false if not present).
+		// However, the frontend now sends it explicitly, making this more robust.
 	}
 
 	bill.CreatedAt = time.Now() // Set creation timestamp
+
 	collection := db.Database.Collection("purchase_bills")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// Attempt to insert the prepared bill document into the MongoDB collection
 	result, err := collection.InsertOne(ctx, bill)
 	if err != nil {
+		log.Printf("Error inserting PurchaseBill into DB: %v", err) // Log the insertion error
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create bill", "details": err.Error()})
 		return
 	}
 
+	// Return success response with the ID of the newly created document
 	c.JSON(http.StatusOK, gin.H{"message": "Purchase bill created", "bill_id": result.InsertedID})
 }
 
+// GetAllBills fetches all documents from the purchase_bills collection.
 func GetAllBills(c *gin.Context) {
 	collection := db.Database.Collection("purchase_bills")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -142,6 +155,7 @@ func GetAllBills(c *gin.Context) {
 	c.JSON(http.StatusOK, bills)
 }
 
+// GetBillByID fetches a single bill by its ID.
 func GetBillByID(c *gin.Context) {
 	id := c.Param("id")
 	objID, err := primitive.ObjectIDFromHex(id)

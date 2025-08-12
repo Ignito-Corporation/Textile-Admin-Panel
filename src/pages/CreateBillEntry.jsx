@@ -1257,6 +1257,7 @@ export default function CreateBillEntry() {
 
       // Submit to backend
       const response = await axios.post("http://localhost:8080/api/purchase-bill/", billData);
+      console.warn(billData)
       alert(`Bill created successfully! ID: ${response.data.bill_id}`);
 
       // Reset form

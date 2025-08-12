@@ -15,7 +15,9 @@ import { CirclePlus } from 'lucide-react';
 
 const CreateOutEntry = () => {
   const [entryType, setEntryType] = useState('');
-  const [vendorName, setVendorName] = useState('');
+  const [vendors, setVendors] = useState([]); // New state for holding vendor list
+  const [selectedVendorId, setSelectedVendorId] = useState(''); // State for selected vendor ID
+  const [selectedVendorName, setSelectedVendorName] = useState(''); // State for selected vendor Name
   const [allProducts, setAllProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [issuedQuantities, setIssuedQuantities] = useState({});
@@ -25,12 +27,30 @@ const CreateOutEntry = () => {
   const [voucherNo, setVoucherNo] = useState('');
   const [dateOut, setDateOut] = useState(new Date().toISOString().split('T')[0]);
 
+  // Fetch vendors on component mount
+  useEffect(() => {
+    const fetchVendors = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/api/master/vendors');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        setVendors(data || []);
+      } catch (err) {
+        console.error('Error fetching vendors:', err);
+        alert(`Error fetching vendors: ${err.message}`);
+      }
+    };
+    fetchVendors();
+  }, []);
+
   // Fetch data when PO number changes
   useEffect(() => {
     const fetchBillData = async () => {
       if (!poNumber) {
         setAllProducts([]);
-        setVendorName('');
+        // setVendorName(''); // No longer needed as vendor is selected via dropdown
         return;
       }
       setIsLoading(true);
@@ -40,7 +60,7 @@ const CreateOutEntry = () => {
           if (response.status === 404) {
              alert('No bill found for this PO Number.');
              setAllProducts([]);
-             setVendorName('');
+             // setVendorName(''); // No longer needed
           } else {
             throw new Error(`HTTP error! status: ${response.status}`);
           }
@@ -49,14 +69,14 @@ const CreateOutEntry = () => {
         const data = await response.json();
         console.log("Fetched Bill Data:", data);
         
-        setVendorName(data?.vendor?.vendorname || '');
+        // Removed setVendorName(data?.vendor?.vendorname || '');
         setAllProducts(data.products || []);
 
       } catch (err) {
         console.error('Error fetching bill data:', err);
         alert(`Error fetching bill data: ${err.message}`);
         setAllProducts([]);
-        setVendorName('');
+        // setVendorName(''); // No longer needed
       } finally {
         setIsLoading(false);
       }
@@ -91,7 +111,6 @@ const CreateOutEntry = () => {
 
   }, [entryType, allProducts]);
 
-
   const handleQtyChange = (index, value, maxQty) => {
     const val = parseFloat(value);
     if (isNaN(val) || val < 0) {
@@ -104,6 +123,11 @@ const CreateOutEntry = () => {
     }
   };
 
+  const handleVendorSelectChange = (vendorId) => {
+    setSelectedVendorId(vendorId);
+    const vendor = vendors.find(v => v.id === vendorId);
+    setSelectedVendorName(vendor ? vendor.name : '');
+  };
 
   const handleSave = async () => {
     const productsToSave = filteredProducts
@@ -124,8 +148,8 @@ const CreateOutEntry = () => {
         gst_amount: (p.rate * issuedQuantities[p.index] * p.gst_percent) / 100,
       }));
 
-    if (!vendorName) {
-      alert('Please enter a valid PO number to fetch vendor details.');
+    if (!selectedVendorId) { // Check if a vendor is selected
+      alert('Please select a vendor.');
       return;
     }
     if (productsToSave.length === 0) {
@@ -145,7 +169,7 @@ const CreateOutEntry = () => {
         body: JSON.stringify({
           po_number: poNumber,
           process: entryType,
-          vendorname: vendorName,
+          vendorname: selectedVendorName, // Use the selected vendor name
           products: productsToSave,
           fpo_number: fpoNumber,
           voucher_no: voucherNo,
@@ -165,7 +189,8 @@ const CreateOutEntry = () => {
       setAllProducts([]);
       setFilteredProducts([]);
       setIssuedQuantities({});
-      setVendorName('');
+      setSelectedVendorId(''); // Reset selected vendor
+      setSelectedVendorName(''); // Reset selected vendor name
       setFpoNumber('');
       setVoucherNo('');
 
@@ -220,12 +245,18 @@ const CreateOutEntry = () => {
           </div>
           <div>
             <Label className="mb-1 block">Vendor Name</Label>
-            <Input
-              placeholder="Auto-populates from PO"
-              value={vendorName}
-              readOnly
-              className="bg-gray-100"
-            />
+            <Select onValueChange={handleVendorSelectChange} value={selectedVendorId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select Vendor" />
+              </SelectTrigger>
+              <SelectContent>
+                {vendors.map(vendor => (
+                  <SelectItem key={vendor.id} value={vendor.id}>
+                    {vendor.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label className="mb-1 block">FPO Number</Label>
@@ -288,7 +319,7 @@ const CreateOutEntry = () => {
         <Button
           className="bg-green-600 hover:bg-green-700 text-white px-8 py-2 text-md rounded"
           onClick={handleSave}
-          disabled={isLoading || filteredProducts.length === 0}
+          disabled={isLoading || filteredProducts.length === 0 || !selectedVendorId} // Disable if no vendor selected
         >
           {isLoading ? 'Saving...' : 'Save Out Entry'}
         </Button>
