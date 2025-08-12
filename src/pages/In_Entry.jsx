@@ -51,7 +51,7 @@ export default function InEntryPage() {
     try {
       setDownloading(true);
 
-      const res = await fetch("http://localhost:8080/api/convert/json-to-pdf", {
+      const res = await fetch("https://textile-admin-panel.onrender.com/api/convert/json-to-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(items),
