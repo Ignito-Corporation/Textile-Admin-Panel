@@ -11,8 +11,7 @@ export default function FinalStock() {
     const [finalProduct, setFinalProduct] = useState({
         product_name: '',
         quantity: '',
-        voucher_number: '',
-        date: ''
+        date: '' // Removed voucher_number
     });
 
     // State for out products
@@ -20,7 +19,7 @@ export default function FinalStock() {
     const [outProduct, setOutProduct] = useState({
         product_name: '',
         quantity: '',
-        party_name: '',
+        party_name: '', // This will receive vendorname from backend
         process: '',
         date: ''
     });
@@ -50,6 +49,35 @@ export default function FinalStock() {
         fetchOutProducts();
     }, []);
 
+    const processFinalStockData = (data) => {
+        const aggregatedDataMap = new Map();
+
+        data.forEach(currentItem => {
+            const productName = currentItem.product_name;
+            let existingProduct = aggregatedDataMap.get(productName);
+
+            if (existingProduct) {
+                // If product exists, add quantity
+                existingProduct.quantity += currentItem.quantity;
+                // Update with the latest date
+                const existingDate = new Date(existingProduct.date);
+                const currentDate = new Date(currentItem.received_at || currentItem.date); // Use received_at or fallback to date
+                if (currentDate > existingDate) {
+                    existingProduct.date = currentDate.toISOString(); // Store as ISO string
+                }
+                aggregatedDataMap.set(productName, existingProduct);
+            } else {
+                // If not, add new product
+                // Ensure 'date' uses 'received_at' from the incoming data if available
+                aggregatedDataMap.set(productName, { 
+                    ...currentItem, 
+                    date: currentItem.received_at || currentItem.date || new Date().toISOString() // Fallback to current date
+                });
+            }
+        });
+        return Array.from(aggregatedDataMap.values());
+    };
+
     const fetchFinalStock = async () => {
         setLoading(true);
         try {
@@ -63,7 +91,9 @@ export default function FinalStock() {
             
             const data = await response.json();
             console.log('📦 Final stock data:', data);
-            setFinalStockList(data || []);
+            
+            const aggregatedData = processFinalStockData(data || []);
+            setFinalStockList(aggregatedData);
         } catch (error) {
             console.error("❌ Error fetching final stock:", error);
             alert(`Failed to fetch final stock: ${error.message}`);
@@ -85,6 +115,7 @@ export default function FinalStock() {
             
             const data = await response.json();
             console.log('📦 Out products data:', data);
+            // No aggregation for out products as per request
             setOutProductList(data || []);
         } catch (error) {
             console.error("❌ Error fetching out products:", error);
@@ -111,7 +142,8 @@ export default function FinalStock() {
         try {
             const payload = {
                 ...finalProduct,
-                quantity: parseFloat(finalProduct.quantity)
+                quantity: parseFloat(finalProduct.quantity),
+                date: finalProduct.date || new Date().toISOString() // Ensure date is sent, default to current date
             };
             console.log('💾 Saving final stock:', payload);
             
@@ -125,7 +157,7 @@ export default function FinalStock() {
             }
             
             alert('Final stock saved successfully!');
-            setFinalProduct({ product_name: '', quantity: '', voucher_number: '', date: '' });
+            setFinalProduct({ product_name: '', quantity: '', date: '' });
             fetchFinalStock(); // Refresh list
         } catch (error) {
             console.error("❌ Error saving final stock:", error);
@@ -144,7 +176,8 @@ export default function FinalStock() {
         try {
             const payload = {
                 ...outProduct,
-                quantity: parseFloat(outProduct.quantity)
+                quantity: parseFloat(outProduct.quantity),
+                date: outProduct.date || new Date().toISOString() // Ensure date is sent, default to current date
             };
             console.log('💾 Saving out product:', payload);
             
@@ -174,7 +207,7 @@ export default function FinalStock() {
             <h2 className="text-2xl font-bold mb-6">All Final Product</h2>
             <div className="mb-6 p-4 border rounded-lg shadow-sm">
                 <h3 className="font-semibold mb-2">Enter Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
                     <div className="flex flex-col">
                         <label htmlFor="product_name" className="mb-1 font-sm">Product Name*</label>
                         <input id="product_name" name="product_name" value={finalProduct.product_name} onChange={handleFinalChange} placeholder="Enter product name" className="p-2 border rounded" />
@@ -184,12 +217,8 @@ export default function FinalStock() {
                         <input id="quantity" name="quantity" type="number" value={finalProduct.quantity} onChange={handleFinalChange} placeholder="Enter quantity" className="p-2 border rounded" />
                     </div>
                     <div className="flex flex-col">
-                        <label htmlFor="voucher_number" className="mb-1 font-sm">Voucher Number</label>
-                        <input id="voucher_number" name="voucher_number" value={finalProduct.voucher_number} onChange={handleFinalChange} placeholder="Enter voucher number" className="p-2 border rounded" />
-                    </div>
-                    <div className="flex flex-col">
                         <label htmlFor="date" className="mb-1 font-sm">Date</label>
-                        <input id="date" type="date" name="date" value={finalProduct.date} onChange={handleFinalChange} className="p-2 border rounded" />
+                        <input id="date" type="date" name="date" value={finalProduct.date ? finalProduct.date.substring(0, 10) : ''} onChange={handleFinalChange} className="p-2 border rounded" />
                     </div>
                 </div>
                 <div className="flex justify-end">
@@ -204,20 +233,18 @@ export default function FinalStock() {
                     <tr className="bg-[#2f3c4f] text-white">
                         <th className="p-3 border text-left">Product Name</th>
                         <th className="p-3 border text-left">Quantity</th>
-                        <th className="p-3 border text-left">Voucher No.</th>
                         <th className="p-3 border text-left">Date</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {loading && <tr><td colSpan="4" className="p-3 border text-center">Loading...</td></tr>}
+                    {loading && <tr><td colSpan="3" className="p-3 border text-center">Loading...</td></tr>}
                     {!loading && finalStockList.length === 0 && (
-                        <tr><td colSpan="4" className="p-3 border text-center text-gray-500">No data available</td></tr>
+                        <tr><td colSpan="3" className="p-3 border text-center text-gray-500">No data available</td></tr>
                     )}
                     {!loading && finalStockList.map((item, index) => (
                         <tr key={item.id || index} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                             <td className="p-3 border">{item.product_name}</td>
                             <td className="p-3 border">{item.quantity}</td>
-                            <td className="p-3 border">{item.voucher_number || '-'}</td>
                             <td className="p-3 border">{item.date ? new Date(item.date).toLocaleDateString() : '-'}</td>
                         </tr>
                     ))}
@@ -247,7 +274,7 @@ export default function FinalStock() {
                     </div>
                     <div className="flex flex-col">
                         <label htmlFor="out_date" className="mb-1 font-sm">Date</label>
-                        <input id="out_date" type="date" name="date" value={outProduct.date} onChange={handleOutChange} className="p-2 border rounded" />
+                        <input id="out_date" type="date" name="date" value={outProduct.date ? outProduct.date.substring(0,10) : ''} onChange={handleOutChange} className="p-2 border rounded" />
                     </div>
                 </div>
                 <div className="flex justify-end">
