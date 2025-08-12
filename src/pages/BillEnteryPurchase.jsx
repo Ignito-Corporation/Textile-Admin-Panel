@@ -151,7 +151,7 @@ export default function BillEntryPurchase() {
           bill.products.forEach(product => {
             allProducts.push({
               id: `${bill.id}-${product.product_id}`,
-              billNumber: bill.billnumber || "-",
+              billNumber: bill.bill_number || "-",
               unit: product.unit || "-",
               shade: product.shade || "-",
               lotNo: product.lot_no || "-",
@@ -162,7 +162,7 @@ export default function BillEntryPurchase() {
               gRate: product.gst_amount,
               amount: product.amount,
               mode: bill.mode || "-",
-              receivingDate: bill.receiveddate || "-",
+              receivingDate: bill.received_date || "-",
             });
           });
         });
