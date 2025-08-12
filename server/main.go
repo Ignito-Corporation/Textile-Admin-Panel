@@ -70,6 +70,7 @@ func main() {
 		po.GET("/:id", routes.GetPOByID)
 		po.GET("/generate-number", routes.GetNextPONumber)
 		po.PATCH("/:id/close", routes.ClosePO)
+		po.DELETE("/purchase-delete/:poNumber", routes.DeletePO)
 	}
 
 	// Bill Endpoint

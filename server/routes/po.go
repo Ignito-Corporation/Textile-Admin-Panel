@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // --- Snapshot Structs --- //
@@ -230,7 +231,6 @@ func GetPOByID(c *gin.Context) {
 	c.JSON(http.StatusOK, po)
 }
 
-
 // ---------------------- NEXT PO NUMBER Endpoint --------------------------- //
 func GetNextPONumber(c *gin.Context) {
 	poNumber := GeneratePONumber()
@@ -268,4 +268,56 @@ func ClosePO(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "PO closed successfully"})
+}
+
+func DeletePO(c *gin.Context) {
+	poNumber := c.Param("poNumber")
+	if poNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "PO Number is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Start a MongoDB session to enable transactions
+	session, err := db.Database.Client().StartSession()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start MongoDB session", "details": err.Error()})
+		return
+	}
+	defer session.EndSession(ctx)
+
+	callback := func(sessCtx mongo.SessionContext) (interface{}, error) {
+
+		_, err := db.Database.Collection("purchase_orders").DeleteMany(sessCtx, bson.M{"po_number": poNumber})
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete from purchase_orders: %w", err)
+		}
+
+		_, err = db.Database.Collection("purchase_bills").DeleteMany(sessCtx, bson.M{"vendor.ponumber": poNumber})
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete from purchase_bills: %w", err)
+		}
+
+		_, err = db.Database.Collection("out_entries").DeleteMany(sessCtx, bson.M{"po_number": poNumber})
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete from out_entries: %w", err)
+		}
+
+		_, err = db.Database.Collection("final_stocks").DeleteMany(sessCtx, bson.M{"po_number": poNumber})
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete from final_stocks: %w", err)
+		}
+
+		return nil, nil
+	}
+
+	_, err = session.WithTransaction(ctx, callback)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction failed, PO data not fully deleted", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("All data related to PO Number %s deleted successfully across relevant collections", poNumber)})
 }
